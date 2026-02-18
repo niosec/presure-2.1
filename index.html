@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PresuRE v2.1</title>
+    
+    <meta name="theme-color" content="#1a365d">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PresuRE">
+    
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="manifest" href="manifest.json">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+    <!-- Header combinado -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="logo-area">
+                <img src="icon-192.png" alt="Logo" class="logo-img">
+                <h1>PresuRE</h1>
+                <span id="save-indicator" class="status-dot" title="Estado de guardado"></span>
+            </div>
+            <div class="header-actions">
+                <button id="theme-toggle" class="icon-btn"><i class="fas fa-moon"></i></button> <!-- Modo oscuro y claro -->
+                <button class="btn btn-secondary" onclick="document.getElementById('fileProject').click()"><i class="fas fa-folder-open"></i> Abrir</button>
+                <button class="btn btn-success" onclick="openSaveOptionsModal()"><i class="fas fa-save"></i> Guardar</button>
+                <button class="btn btn-secondary" onclick="openConfigModal()" title="Configuración"><i class="fas fa-cog"></i> Configuración</button>
+                <button class="btn btn-info" onclick="openReportModal()" title="Generar Reportes"><i class="fas fa-print"></i> Reportes</button>
+                <button class="btn btn-danger" onclick="openDeleteModal()" title="Opciones de Borrado"><i class="fas fa-trash-alt"></i> Borrar</button>
+        
+                <button id="install-btn" class="install-btn hidden"><i class="fas fa-download"></i> Instalar</button>
+                <input type="file" id="fileProject" accept=".json,.presu,application/json" style="display:none" onchange="loadProjectJSON(this)">
+            </div>
+        </div>
+    </header>
+
+    <!-- Navegación -->
+    <nav class="app-nav">
+        <button class="nav-item tab active" onclick="switchTab('b1')">
+            <div class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+            <span class="nav-label">Presu</span>
+        </button>
+            
+        <button class="nav-item tab" onclick="switchTab('items')">
+                <div class="nav-icon"><i class="fas fa-database"></i></div>
+                <span class="nav-label">Banco</span>
+        </button>
+            
+        <button class="nav-item tab" onclick="switchTab('db')">
+                <div class="nav-icon"><i class="fas fa-cubes"></i></div>
+                <span class="nav-label">Insumos</span>
+        </button>
+            
+        <button class="nav-item tab" onclick="switchTab('calc')">
+                <div class="nav-icon"><i class="fas fa-calculator"></i></div>
+                <span class="nav-label">Calcu</span>
+        </button>
+    </nav>
+
+    <!-- Contenedor principal con todos los paneles -->
+    <div class="container">
+
+        <!-- Panel Presupuesto (B1) -->
+        <div id="panel-b1" class="panel active">
+            <div style="margin-bottom:20px;">
+                <h2 style="margin:0 0 12px 0; color:var(--text-primary); font-size:1.5rem;">Presupuesto de Obra</h2>
+                
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content: space-between;">
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-primary" onclick="openItemBankModalForSelect()" title="Agregar item de Base de datos">
+                            <i class="fas fa-plus-square"></i> Agregar
+                        </button>
+                        <button class="btn btn-secondary" onclick="createEmptyItemB1()" title="Crear nuevo item">
+                            <i class="fas fa-plus"></i> Nuevo
+                        </button>
+                    </div>
+                    
+                    <div style="display:flex; gap:8px;">                    
+                        <button class="btn btn-success" onclick="exportB1ToExcel()" title="Exportar presupuesto a Excel">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </button>
+                        <div style="display:inline-block; margin-left:5px;">
+                            <input type="file" id="fileImportBudget" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none" onchange="importBudgetFromExcel(this)">
+                            <button class="btn btn-warning" onclick="document.getElementById('fileImportBudget').click()" title="Importar Volúmenes de Obra">
+                                <i class="fas fa-file-import"></i> Importar
+                            </button>
+                        </div>
+
+                        <div class="insumos-buttons">
+                            <button class="btn btn-purple" onclick="openInsumosModal('materiales')" title="Ver materiales usados"><i class="fas fa-box"></i></button>
+                            <button class="btn btn-warning" onclick="openInsumosModal('mano_obra')" title="Ver mano de obra usada"><i class="fas fa-users"></i></button>
+                            <button class="btn btn-info" onclick="openInsumosModal('equipos')" title="Ver equipos usados"><i class="fas fa-tools"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-container" style="margin-bottom: 0; border-bottom: none; border-radius: 6px 6px 0 0;">
+                <table id="table-b1" style="min-width: 950px;">
+                    <thead>
+                        <tr>
+                            <th style="width:40px">Edit</th>
+                            <th style="width:35px">Nº</th>
+                            <th style="width:70px">Código</th>
+                            <th>Descripción del Ítem</th>
+                            <th style="width:55px">Und.</th>
+                            <th style="width:80px">Cant.</th>
+                            <th style="width:80px">P.Unit</th>
+                            <th style="width:80px">Total</th>
+                            <th style="width:120px">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="b1-body"></tbody>
+                </table>
+            </div>
+
+            <div class="module-bar">
+                <div class="module-tabs-container" id="module-tabs">
+                    <!-- Las pestañas de módulos se generan aquí -->
+                </div>
+                <div class="module-controls">
+                    <button class="module-btn" onclick="addModule()" title="Nuevo Módulo">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="module-btn" onclick="renameCurrentModule()" title="Renombrar Módulo">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <button class="module-btn" onclick="cloneCurrentModule()" title="Clonar Módulo">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    <button class="module-btn" onclick="deleteCurrentModule()" title="Eliminar Módulo" style="color:#e53e3e;">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div style="margin-top:15px; display:flex; flex-direction:column; gap:5px; align-items:flex-end;">
+                <div style="font-size:1rem; color:var(--text-secondary); padding:10px;">
+                    Subtotal <span id="current-module-name-display" style="font-weight:600; color: var(--text-secondary);">Módulo</span>: 
+                    <span id="module-total-display" style="font-weight:700;">0.00</span> Bs
+                </div>
+                <div style="font-size:1.3rem; font-weight:700; color:var(--text-primary); padding:10px; background:var(--bg-card-alt); box-sizing: border-box; border-radius:8px; width:100%; text-align:right;">
+                    Total Presupuesto: <span id="grand-total-display" style="color: var(--text-primary);">0.00</span> Bs
+                </div>
+            </div>
+
+            <div id="b1-pagination" class="pagination" style="display: none;">
+                <button class="btn btn-sm btn-secondary" onclick="changePage('b1', -1)"><i class="fas fa-chevron-left"></i> Anterior</button>
+                <span class="pagination-info" id="b1-page-info">Página 1 de 1</span>
+                <button class="btn btn-sm btn-secondary" onclick="changePage('b1', 1)">Siguiente <i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+
+        <!-- Panel Calculadora -->
+        <div id="panel-calc" class="panel">
+            <div style="background:var(--bg-card-alt); padding:15px; border-radius:8px; border:1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom:15px; border-bottom:1px solid var(--bg-card-alt); padding-bottom:10px;">
+                    <h2 style="margin:0; color:var(--text-primary); font-size:1.3rem;">
+                        Calculadora de Materiales
+                    </h2>
+                    <button onclick="printCalcReport()" class="btn-primary" style="background-color: var(--accent); padding: 8px 16px; font-size: 0.9rem; border: none; transition: opacity 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <i class="fas fa-print"></i> Imprimir Reporte
+                    </button>
+                </div>
+                
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    
+                    <div class="calc-search-container">
+                        <label class="font-bold" style="display:block; margin-bottom:4px; color:var(--text-secondary); font-size:0.85rem;">1. Buscar Ítem (APU):</label>
+                        <div style="position:relative;">
+                            <i class="fas fa-search search-icon-inside"></i>
+                            <input type="text" id="calc-search-input" placeholder="Escribe para buscar..." 
+                                onkeyup="searchCalcItem()" 
+                                style="padding-left:35px; width:100%; height:38px;">
+                        </div>
+                        <div id="calc-search-results" style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:0 0 6px 6px; z-index:100; box-shadow:var(--shadow);"></div>
+                    </div>
+
+                    <div style="flex: 2; min-width:200px; background:var(--bg-card); padding:8px 12px; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-wrap:wrap; align-items:center; gap:5px; overflow:hidden;">
+                        <div id="calc-selected-name" style="flex:1 1 auto; min-width:0; font-weight:700; color:var(--text-primary); font-size:0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            - Seleccione ítem -                            
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary); display:flex; gap:5px; white-space: nowrap;">
+                            Unidad: <span id="calc-selected-unit" style="font-weight:600;">-</span>
+                        </div>
+                    </div>
+
+                    <style>
+                    @media (max-width: 400px) {
+                        #calc-selected-name {
+                            flex: 1 1 100% !important; /* Ocupa toda la fila */
+                            white-space: normal !important; /* Opcional: permite que el texto del nombre se envuelva en varias líneas */
+                        }
+                    }
+                    </style>
+
+                    <div style="width:120px;">
+                        <label class="font-bold" style="display:block; margin-bottom:4px; color:var(--success); font-size:0.85rem;">2. Cant. Obra:</label>
+                        <input type="text" inputmode="decimal" id="calc-quantity" value="1" 
+                                onchange="this.value = solveMathExpression(this.value); recalcCalcTable()" 
+                                onkeypress="if(event.key === 'Enter') this.blur();"
+                                onfocus="this.select()" 
+                                style="height:38px; font-size:1.1rem; font-weight:bold; color:var(--success); border:2px solid var(--success); text-align:center; width:100%;">
+                    </div>
+                </div>     
+
+            </div>
+
+            <div class="table-container" style="margin-top:0;">
+                <table id="table-calc">
+                    <thead>
+                        <tr>
+                            <th style="width:40%">Descripción insu.</th>
+                            <th style="width:10%">Und.</th>
+                            <th style="width:15%">Cant-Unit.</th>
+                            <th style="width:15%">Fact/Div</th>
+                            <th style="width:20%">Requerido</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calc-body">
+                        <tr><td colspan="5" class="text-center" style="padding:20px; color:#718096;">Selecciona un ítem para calcular.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Panel Banco de Ítems -->
+        <div id="panel-items" class="panel">
+           <div style="margin-bottom:10px; padding:15px; background:var(--bg-card-alt); border-radius:6px;">
+                <h2 style="margin:0 0 12px 0; color:var(--text-primary); font-size:1.5rem;">Banco de Ítems</h2>
+                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content: space-between; align-items:center;">
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-primary" onclick="createBankItem()">
+                            <i class="fas fa-plus"></i> Crear Nuevo
+                        </button>
+                        <button class="btn btn-success" onclick="exportBankJSON()">
+                            <i class="fas fa-file-upload"></i> Exportar
+                        </button>
+                        <button class="btn btn-warning" onclick="document.getElementById('fileBank').click()">
+                            <i class="fas fa-download"></i> Importar
+                        </button>
+                        <input type="file" id="fileBank" accept=".json,.presudb,application/json" style="display:none" onchange="importBankJSON(this)">
+                    </div>
+                    
+                    <div style="position:relative; flex-grow:1; max-width:350px;">
+                        <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#a0aec0;"></i>
+                        <input type="text" id="main-bank-search" placeholder="Buscar en el banco..." 
+                            onkeyup="currentPage.bank=1; renderBankList()" 
+                            style="width:100%; padding:10px 10px 10px 35px; border-radius:6px; border:1px solid var(--border-color);">
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom:10px; padding:15px; background:var(--bg-card-alt); border:1px dashed #38a169; border-radius:6px;">
+                <strong><i class="fas fa-file-import"></i> Importar Excel (APUs):</strong>
+                <div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <input type="file" id="fileComplexAPU" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" style="display:none" onchange="importComplexAPUReport(this)">
+                    <button class="btn btn-success btn-sm" onclick="document.getElementById('fileComplexAPU').click()">
+                        <i class="fas fa-file-excel"></i> Seleccionar Archivo
+                    </button>
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">Formato: Excel con columnas claras</span>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table id="table-bank" style="min-width: 650px;">
+                    <thead>
+                        <tr>
+                            <th style="width:35px" title="Agregar al presupuesto">aPresu</th>
+                            <th style="width:35px">Cód</th>
+                            <th>Descripción</th>
+                            <th style="width:35px">Und.</th>
+                            <th style="width:80px">Precio Ref.</th>
+                            <th style="width:85px">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bank-body"></tbody>
+                </table>
+            </div>
+            
+            <div id="bank-pagination" class="pagination" style="display: none;">
+                <button class="btn btn-sm btn-secondary" onclick="changePage('bank', -1)">
+                    <i class="fas fa-chevron-left"></i> Anterior
+                </button>
+                <span class="pagination-info" id="bank-page-info">Página 1 de 1</span>
+                <button class="btn btn-sm btn-secondary" onclick="changePage('bank', 1)">
+                    Siguiente <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel Editor APU -->
+        <div id="panel-editor" class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:2px solid var(--accent); padding-bottom:12px;">
+                <h3 style="margin:0; color:var(--accent); font-size:1.3rem;" id="editor-title">Editar APU</h3>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-warning btn-sm" onclick="navigateEditor(-1)" title="Anterior (Ctrl+←)" style="width: 30px;">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="btn btn-warning btn-sm" onclick="navigateEditor(1)" title="Siguiente (Ctrl+→)" style="width: 30px;">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    <button class="btn btn-secondary" onclick="discardEditor()"> Descartar</button>
+                    <button class="btn btn-success" onclick="closeEditor()"> Guardar</button>
+                </div>
+            </div>
+
+            <div class="apu-header-grid">
+                <div>
+                    <label class="font-bold">Descripción:</label> 
+                    <input type="text" id="apu-desc" onchange="updateEditorMeta()" placeholder="Descripción del ítem">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div>
+                        <label class="font-bold">Unidad:</label> 
+                        <input type="text" id="apu-unit" onchange="updateEditorMeta()" placeholder="Ej: m3, glb">
+                    </div>
+                    <div>
+                        <label class="font-bold">Cantidad:</label> 
+                        <input type="text" inputmode="decimal" id="apu-qty" 
+                               onchange="updateEditorMeta()" 
+                               onblur="autoformatInput(this, 'qty')" 
+                               onfocus="this.select()"
+                               step="0.01" min="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="apu-body-grid">
+                <div class="apu-details">
+                    <!-- Materiales -->
+                    <div class="resource-group">
+                        <div class="group-header">
+                            <span><i class="fas fa-box"></i> Materiales</span>
+                            <div style="display:flex; gap:5px;"> 
+                                <button class="btn btn-success btn-sm" onclick="quickCreateResource('materiales')" title="Crear Nuevo y Añadir">
+                                    <i class="fas fa-magic"></i> Crear
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="openResourceModal('materiales')">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                        </div>
+                        <div class="editor-table-container">
+                            <table id="table-mat">
+                                <thead>
+                                    <tr>
+                                        <th>Descripción</th>
+                                        <th>Und.</th>
+                                        <th>Rend.</th>
+                                        <th>Precio</th>
+                                        <th>Total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="text-right font-bold" style="padding:10px; background:var(--bg-card-alt); border-top:1px solid var(--border-color);">
+                            Subtotal: <span id="sub-mat">0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Mano de Obra -->
+                    <div class="resource-group">
+                        <div class="group-header">
+                            <span><i class="fas fa-users"></i> Mano de Obra</span>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn btn-success btn-sm" onclick="quickCreateResource('mano_obra')" title="Crear Nuevo y Añadir">
+                                    <i class="fas fa-magic"></i> Crear
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="openResourceModal('mano_obra')">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                        </div>
+                        <div class="editor-table-container">
+                            <table id="table-mo">
+                                <thead>
+                                    <tr>
+                                        <th>Descripción</th>
+                                        <th>Und.</th>
+                                        <th>Hrs</th>
+                                        <th>Jornal</th>
+                                        <th>Total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div style="padding:12px; background:var(--bg-card-alt); font-size:0.85rem;">
+                            <div class="total-row"><span>Subtotal MO:</span> <span id="mo-basic">0.00</span></div>
+                            <div class="total-row" style="color:var(--accent)">
+                                <span>(+) Cargas Soc. (<span id="lbl-soc"></span>%):</span> 
+                                <span id="mo-soc">0.00</span>
+                            </div>
+                            <div class="total-row" style="color:var(--accent)">
+                                <span>(+) IVA MO (<span id="lbl-iva"></span>%):</span> 
+                                <span id="mo-iva">0.00</span>
+                            </div>
+                            <div class="text-right font-bold" style="margin-top:8px; padding-top:8px; border-top:2px solid #e2e8f0;">
+                                Total Mano de Obra: <span id="sub-mo">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Equipos -->
+                    <div class="resource-group">
+                        <div class="group-header">
+                            <span><i class="fas fa-tools"></i> Equipos</span>
+                            <div style="display:flex; gap:5px;">
+                                <button class="btn btn-success btn-sm" onclick="quickCreateResource('equipos')" title="Crear Nuevo y Añadir">
+                                    <i class="fas fa-magic"></i> Crear
+                                </button>
+                                <button class="btn btn-primary btn-sm" onclick="openResourceModal('equipos')">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                        </div>
+                        <div class="editor-table-container">
+                            <table id="table-eq">
+                                <thead>
+                                    <tr>
+                                        <th>Descripción</th>
+                                        <th>Und.</th>
+                                        <th>Rend.</th>
+                                        <th>Tarifa</th>
+                                        <th>Total</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div style="padding:12px; background:var(--bg-card-alt); font-size:0.85rem;">
+                            <div class="total-row">
+                                <span>Subtotal Eq:</span> 
+                                <span id="eq-basic">0.00</span>
+                            </div>
+                            <div class="total-row" style="color:var(--accent)">
+                                <span>(+) Herramientas (<span id="lbl-tools"></span>% de MO):</span> 
+                                <span id="eq-tools">0.00</span>
+                            </div>
+                            <div class="text-right font-bold" style="margin-top:8px; padding-top:8px; border-top:2px solid #e2e8f0;">
+                                Total Equipo: <span id="sub-eq">0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resumen -->
+                <div>
+                    <div class="totals-card">
+                        <h4 style="margin-top:0; border-bottom:1px solid #cbd5e0; padding-bottom:8px; color:var(--primary);">
+                            <i class="fas fa-calculator"></i> Resumen
+                        </h4>
+                        
+                        <div class="total-row"><span>Costo Directo:</span> <strong id="sum-direct">0.00</strong></div>
+                        <div class="total-row"><span>Gastos Grales (<span id="lbl-gg"></span>%):</span> <span id="sum-gg">0.00</span></div>
+                        <div class="total-row"><span>Utilidad (<span id="lbl-util"></span>%):</span> <span id="sum-util">0.00</span></div>
+                        <div class="total-row"><span>Impuesto IT (<span id="lbl-it"></span>%):</span> <span id="sum-it">0.00</span></div>
+                        
+                        <div class="total-final">
+                            <span>P. UNITARIO:</span>
+                            <span id="final-price">0.00</span>
+                        </div>
+                        
+                        <div style="margin-top:15px; font-size:0.8rem; color:#718096; text-align:center;">
+                            <i class="fas fa-info-circle"></i> Precio calculado automáticamente
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Base de Datos de Insumos -->
+        <div id="panel-db" class="panel">
+            <div style="margin-bottom:20px;">
+                <h2 style="margin:0 0 12px 0; color:var(--text-primary); font-size:1.5rem;">Gestión de Insumos</h2>
+                <div class="bulk-upload-container">
+                    <strong class="bulk-upload-label">
+                        <i class="fas fa-file-upload"></i> Carga Masiva:
+                    </strong>
+                    
+                    <input type="file" id="dbFile" 
+                        accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" 
+                        class="bulk-file-input">
+                        
+                    <select id="dbImportType" class="bulk-type-select">
+                        <option value="materiales">Materiales</option>
+                        <option value="mano_obra">Mano de Obra</option>
+                        <option value="equipos">Equipos</option>
+                    </select>
+
+                    <div class="bulk-actions">
+                        <button class="btn btn-warning btn-sm" onclick="importDBFromExcel()">
+                            <i class="fas fa-upload"></i> Subir
+                        </button>
+                        <button class="btn btn-purple btn-sm" onclick="cleanAndMergeDuplicates()" title="Fusionar descripciones idénticas">
+                            <i class="fas fa-broom"></i> Unificar
+                        </button>
+                        <button class="btn btn-info btn-sm" onclick="syncDbToBank()" title="Actualizar precios del Banco con los de esta lista">
+                            <i class="fas fa-sync"></i> Sincronizar Banco
+                        </button>
+                    </div>
+                </div>
+                <p style="font-size: 0.8rem; color: #718096; margin-top: 8px;">
+                    <i class="fas fa-sort"></i> Toca los títulos para ordenar. La numeración se auto-ajusta (1, 2, 3...) según el orden.
+                </p>
+            </div>
+
+            <div class="db-grid-container">
+                <div>
+                    <div class="group-header" style="background:var(--primary); color:white">
+                        <i class="fas fa-box"></i> MATERIALES 
+                        <button class="btn btn-success btn-sm" onclick="addDbRow('materiales')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="table-container" style="max-height:450px; overflow-y:auto">
+                        <table id="db-table-materiales" class="db-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-code" onclick="toggleDbSort('materiales', 'code')">Nº <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="col-desc" onclick="toggleDbSort('materiales', 'desc')">Descripción <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="col-unit">Und.</th>
+                                    <th class="col-price">Precio</th>
+                                    <th class="col-action"></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div id="db-mat-pagination" class="pagination" style="display: none; margin-top: 10px;">
+                        <button class="btn btn-sm btn-secondary" onclick="changePage('db-mat', -1)">
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <span class="pagination-info" id="db-mat-page-info">Página 1 de 1</span>
+                        <button class="btn btn-sm btn-secondary" onclick="changePage('db-mat', 1)">
+                            Siguiente <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <div class="group-header" style="background:var(--primary); color:white">
+                        <i class="fas fa-users"></i> MANO DE OBRA 
+                        <button class="btn btn-success btn-sm" onclick="addDbRow('mano_obra')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="table-container" style="max-height:450px; overflow-y:auto">
+                        <table id="db-table-mano_obra" class="db-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-code" onclick="toggleDbSort('mano_obra', 'code')">Nº <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="col-desc" onclick="toggleDbSort('mano_obra', 'desc')">Descripción <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="col-unit">Und.</th>
+                                    <th class="col-price">Jornal</th>
+                                    <th class="col-action"></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div id="db-mo-pagination" class="pagination" style="display: none; margin-top: 10px;">
+                        <button class="btn btn-sm btn-secondary" onclick="changePage('db-mo', -1)">
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <span class="pagination-info" id="db-mo-page-info">Página 1 de 1</span>
+                        <button class="btn btn-sm btn-secondary" onclick="changePage('db-mo', 1)">
+                            Siguiente <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <div class="group-header" style="background:var(--primary); color:white">
+                        <i class="fas fa-tools"></i> EQUIPOS 
+                        <button class="btn btn-success btn-sm" onclick="addDbRow('equipos')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="table-container" style="max-height:450px; overflow-y:auto">
+                        <table id="db-table-equipos" class="db-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-code" onclick="toggleDbSort('equipos', 'code')">Nº <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="col-desc" onclick="toggleDbSort('equipos', 'desc')">Descripción <i class="fas fa-sort sort-icon"></i></th>
+                                    <th class="col-unit">Und.</th>
+                                    <th class="col-price">Tarifa</th>
+                                    <th class="col-action"></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div id="db-eq-pagination" class="pagination" style="display: none; margin-top: 10px;">
+                        <button class="btn btn-sm btn-secondary" onclick="changePage('db-eq', -1)">
+                            <i class="fas fa-chevron-left"></i> Anterior
+                        </button>
+                        <span class="pagination-info" id="db-eq-page-info">Página 1 de 1</span>
+                        <button class="btn btn-sm btn-secondary" onclick="changePage('db-eq', 1)">
+                            Siguiente <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- fin container -->
+
+    <!-- Modales -->
+    <div id="resourceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin:0; font-size:1.3rem;">
+                    <i class="fas fa-search"></i> Seleccionar Recurso
+                </h3>
+                <span style="font-size:28px; cursor:pointer; opacity:0.8; transition:opacity 0.2s;" 
+                    onclick="closeResourceModal()" 
+                    onmouseover="this.style.opacity='1'" 
+                    onmouseout="this.style.opacity='0.8'">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="position:relative; margin-bottom:15px;">
+                    <i class="fas fa-search" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); color:#718096;"></i>
+                    <input type="text" id="modal-search" placeholder="Buscar insumo por descripción o código..." 
+                        onkeyup="filterModalList()" 
+                        style="width:100%; padding:12px 12px 12px 45px; font-size:0.95rem; border:2px solid var(--accent); border-radius:6px;">
+                </div>
+                <div style="height:calc(100% - 60px); overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;">
+                    <table class="db-select-table" style="width:100%">
+                        <thead style="position:sticky; top:0; z-index:1; background:var(--primary);">
+                            <tr>
+                                <th width="15%">Nº</th>
+                                <th>Descripción</th>
+                                <th width="15%">Und.</th>
+                                <th width="20%">Precio</th>
+                                <th width="15%"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-list-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="conflictModal" class="modal" style="z-index: 2500;">
+        <div class="modal-content" style="max-width: 400px; height: auto; margin-top: 15vh;">
+            <div class="modal-header" style="background-color: var(--warning); color: #000;">
+                <h3 style="margin:0; font-size:1.2rem;">
+                    <i class="fas fa-exclamation-triangle"></i> Insumo Duplicado
+                </h3>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <p id="conflict-msg" style="font-size: 1.1rem; margin-bottom: 20px;">
+                    Este insumo ya existe en el APU.
+                </p>
+                <div class="conflict-options">
+                    <button class="btn btn-primary" onclick="resolveConflict('replace')">
+                        <i class="fas fa-sync-alt"></i> Reemplazar
+                    </button>
+                    <button class="btn btn-danger" onclick="resolveConflict('discard')">
+                        <i class="fas fa-times"></i> Descartar
+                    </button>
+                </div>
+                <p style="font-size: 0.85rem; color: #718096; margin-top: 15px;">
+                    <b>Reemplazar:</b> Actualiza los datos (precio/unidad) del insumo existente.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="bankModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin:0;"><i class="fas fa-database"></i> Agregar del Banco</h3>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button id="btn-bulk-add" class="btn btn-success btn-sm" onclick="addSelectedBankItems()" style="display:none;">
+                        <i class="fas fa-plus-double"></i> Agregar Seleccionados (<span id="selected-count">0</span>)
+                    </button>
+                    <span style="font-size:28px; cursor:pointer" onclick="closeBankModal()">&times;</span>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div style="position:relative; margin-bottom:12px;">
+                    <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#718096;"></i>
+                    <input type="text" id="bank-search" placeholder="Buscar actividad por nombre o código..." onkeyup="filterBankModal()" 
+                        style="width:100%; padding:10px 10px 10px 35px; border-radius:6px; border:1px solid var(--border-color);">
+                </div>
+                <div style="overflow-y:auto; flex-grow:1; border:1px solid #e2e8f0; border-radius:6px;">
+                    <table class="db-select-table">
+                        <thead style="position:sticky; top:0; z-index:10; background:var(--primary);">
+                            <tr>
+                                <th style="width:30px"><input type="checkbox" id="bank-select-all" onclick="toggleSelectAllBank(this)"></th>
+                                <th style="width:50px">Cód</th>
+                                <th>Descripción del Ítem</th>
+                                <th style="width:50px">Und.</th>
+                                <th style="width:70px">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bank-modal-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="insumosModal" class="modal">
+        <div class="modal-content" style="max-width: 95%; max-height: 95%; width: 95%; height: 95%;">
+            <div class="modal-header">
+                <h3 id="insumosModalTitle" style="margin:0; font-size:1.3rem;">
+                    <i class="fas fa-list-alt"></i> <span id="modalTipoInsumo">Materiales</span> Usados en Presupuesto
+                </h3>
+                <span style="font-size:28px; cursor:pointer; opacity:0.8; transition:opacity 0.2s;" 
+                    onclick="closeInsumosModal()" 
+                    onmouseover="this.style.opacity='1'" 
+                    onmouseout="this.style.opacity='0.8'">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-purple btn-sm" onclick="initiateUnification()">
+                            <i class="fas fa-object-group"></i> Fusionar Seleccionados
+                        </button>
+                        <button class="btn btn-warning btn-sm" onclick="exportInsumosToExcel()">
+                            <i class="fas fa-file-excel"></i> Exportar a Excel
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-info btn-sm" onclick="aplicarPreciosEditados()">
+                            <i class="fas fa-check-double"></i> Aplicar Cambios
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="overflow: auto; height: calc(100% - 120px); border: 1px solid #e2e8f0; border-radius: 6px;">
+                    <table style="width:100%;">
+                        <thead style="position:sticky; top:0; z-index:1; background:var(--primary);">
+                            <tr>
+                                <th width="5%" class="select-all-row">
+                                    <input type="checkbox" id="selectAllInsumos" class="insumo-checkbox" onchange="toggleSelectAllInsumos(this)">
+                                </th>
+                                <th width="45%">Descripción Insumo</th>
+                                <th width="8%">Und.</th>
+                                <th width="12%">Cant.Total</th>
+                                <th width="15%">P. Unitario</th>
+                                <th width="15%">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="insumosTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="configModal" class="modal">
+        <div class="config-modal-content">
+            <div class="config-modal-header">
+                <h3 style="margin:0; font-size:1.3rem;">
+                    <i class="fas fa-cog"></i> Configuración Global
+                </h3>
+                <span style="font-size:28px; cursor:pointer; opacity:0.8; transition:opacity 0.2s;" 
+                    onclick="closeConfigModal()" 
+                    onmouseover="this.style.opacity='1'" 
+                    onmouseout="this.style.opacity='0.8'">&times;</span>
+            </div>
+            <div class="config-modal-body">
+
+                <label class="font-bold" style="color:var(--purple); display:block; margin-bottom:8px;">
+                    <i class="fas fa-list-ol"></i> Formato de Números (Miles y Decimales):
+                </label>
+                <select id="conf-format" onchange="saveSettings()" style="margin-bottom:20px; padding:8px 12px; width:100%;">
+                    <option value="intl">Internacional: 1 234.56 (Espacio / Punto)</option>
+                    <option value="latam">LATAM/USA: 1,234.56 (Coma / Punto)</option>
+                    <option value="euro">España/Europa: 1.234,56 (Punto / Coma)</option>
+                    <option value="raw">Datos Crudos: 1234.56 (Sin separadores)</option>
+                </select>
+
+                <div style="margin-bottom:15px; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">
+                    <h4 style="margin:0 0 10px 0; color:var(--purple); font-size:1rem;">
+                        <i class="fas fa-calculator"></i> Precisión de Decimales
+                    </h4>
+                    <div class="config-grid">
+                        <div class="config-item">
+                            <label>Rendimientos (Insumos)</label>
+                            <select id="conf-dec-yield" onchange="saveSettings()">
+                                <option value="2">2 decimales</option>
+                                <option value="3">3 decimales</option>
+                                <option value="4">4 decimales</option>
+                                <option value="5">5 decimales</option>
+                            </select>
+                        </div>
+                        <div class="config-item">
+                            <label>Precio Unitario (Insumos)</label>
+                            <select id="conf-dec-price" onchange="saveSettings()">
+                                <option value="2">2 decimales</option>
+                                <option value="3">3 decimales</option>
+                                <option value="4">4 decimales</option>
+                                <option value="5">5 decimales</option> 
+                            </select>
+                        </div>
+                        <div class="config-item">
+                            <label>Parciales (Subtotales)</label>
+                            <select id="conf-dec-partial" onchange="saveSettings()">
+                                <option value="2">2 decimales</option>
+                                <option value="3">3 decimales</option>
+                                <option value="4">4 decimales</option>
+                                <option value="5">5 decimales</option>
+                            </select>
+                        </div>
+                        <div class="config-item">
+                            <label>Cómputos (Cant. Obra)</label>
+                            <select id="conf-dec-qty" onchange="saveSettings()">
+                                <option value="1">1 decimal</option>
+                                <option value="2">2 decimales</option>
+                                <option value="3">3 decimales</option>
+                                <option value="4">4 decimales</option>
+                                <option value="5">5 decimales</option>
+                            </select>
+                        </div>
+                        <div class="config-item config-full-width" style="background:var(--bg-card-alt); border-color:#bee3f8;">
+                            <label style="color:var(--primary);">Total Monetario (Precio Final)</label>
+                            <select id="conf-dec-total" onchange="saveSettings()">
+                                <option value="2">2 decimales (Estándar)</option>
+                                <option value="3">3 decimales</option>
+                                <option value="4">4 decimales (Precisión Alta)</option>
+                                <option value="5">5 decimales (Precisión Muy Alta)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr; gap:5px;">
+                    <h4 style="margin:0 0 10px 0; color:var(--purple); font-size:1rem;">
+                        <i class="fa-solid fa-money-check-dollar"></i> Parámetros de cálculo NB-SABS
+                    </h4>
+                    <div>
+                        <label class="font-bold">Cargas Sociales (% de MO):</label>
+                        <input type="number" id="conf-social" onchange="saveSettings()" step="0.01" min="0" style="width:100%;">
+                    </div>
+                    
+                    <div>
+                        <label class="font-bold">IVA Mano de Obra (Factor %):</label>
+                        <input type="number" id="conf-iva-mo" onchange="saveSettings()" step="0.01" min="0" style="width:100%;">
+                    </div>
+                    
+                    <div>
+                        <label class="font-bold">Herramientas Menores (% de Total MO):</label>
+                        <input type="number" id="conf-tools" onchange="saveSettings()" step="0.01" min="0" style="width:100%;">
+                    </div>
+                    <div>
+                        <label class="font-bold" style="color:var(--accent)">Gastos Generales (%):</label>
+                        <input type="number" id="conf-gg" onchange="saveSettings()" step="0.01" min="0" style="width:100%;">
+                    </div>
+                    
+                    <div>
+                        <label class="font-bold" style="color:var(--accent)">Utilidad (%):</label>
+                        <input type="number" id="conf-util" onchange="saveSettings()" step="0.01" min="0" style="width:100%;">
+                    </div>
+                    
+                    <div>
+                        <label class="font-bold">Impuesto a las Transacciones - IT (%):</label>
+                        <input type="number" id="conf-it" onchange="saveSettings()" step="0.01" min="0" style="width:100%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin:0;"><i class="fas fa-file-invoice"></i> Centro de Reportes</h3>
+                <span style="font-size:28px; cursor:pointer;" onclick="closeReportModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 6px; color: var(--secondary);">
+                        <i class="fas fa-pen"></i> Nombre del Proyecto:
+                    </label>
+                    <input type="text" id="reportProjectName" placeholder="Escribe el nombre del proyecto..." 
+                        style="width: 100%; padding: 10px; border: 2px solid #cbd5e0; border-radius: 6px; font-size: 1rem; transition: border 0.3s;">
+                </div>
+
+                <div style="margin-bottom: 25px; text-align: center;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 10px; color: var(--secondary);">Formato de Salida:</label>
+                    <div class="format-selector">
+                        <label class="format-option active" onclick="setReportFormat('pdf')">
+                            <input type="radio" name="repFormat" value="pdf" checked hidden>
+                            <i class="fas fa-file-pdf"></i> PDF
+                        </label>
+                        <label class="format-option" onclick="setReportFormat('excel')">
+                            <input type="radio" name="repFormat" value="excel" hidden>
+                            <i class="fas fa-file-excel"></i> Excel
+                        </label>
+                    </div>
+                </div>
+
+                <label style="font-weight: bold; display: block; margin-bottom: 15px; color: var(--secondary); text-align: center;">Reportes Disponibles:</label>
+
+                <div class="report-grid">
+                    <button class="btn-report" onclick="generateSelectedReport('pg')">
+                        <i class="fas fa-list-alt"></i>
+                        <span>Formulario B-1 (PG)</span>
+                    </button>
+                    
+                    <button class="btn-report" onclick="generateSelectedReport('apu')">
+                        <i class="fas fa-calculator"></i>
+                        <span>Formulario B-2 (APUs)</span>
+                    </button>
+
+                    <button class="btn-report" onclick="generateSelectedReport('materiales')">
+                        <i class="fas fa-box"></i>
+                        <span>Insumos: Materiales</span>
+                    </button>
+
+                    <button class="btn-report" onclick="generateSelectedReport('mano_obra')">
+                        <i class="fas fa-users"></i>
+                        <span>Insumos: Mano de Obra</span>
+                    </button>
+
+                    <button class="btn-report" onclick="generateSelectedReport('equipos')">
+                        <i class="fas fa-truck-monster"></i>
+                        <span>Insumos: Maquinaria</span>
+                    </button>
+
+                    <button class="btn-report" style="font-weight: bold; font-size: 1.1em;" onclick="generateSelectedReport('masivo')">
+                        <i class="fas fa-folder-open"></i>
+                        <span>EXPORTACIÓN MASIVA COMPLETA</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="saveOptionsModal" class="modal" style="z-index: 3100;">
+        <div class="modal-content" style="max-width: 350px; height: auto; margin-top: 20vh;">
+            <div class="modal-header" style="background: var(--success); color: white;">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-save"></i> Opciones de Guardado</h3>
+                <span style="font-size:24px; cursor:pointer;" onclick="document.getElementById('saveOptionsModal').style.display='none'">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px; text-align: center;">
+                <p style="color: var(--text-primary); margin-bottom: 20px;">¿Qué deseas exportar a archivo?</p>
+                
+                <button class="btn btn-success" style="width: 100%; margin-bottom: 10px; justify-content: flex-start;" onclick="exportProjectJSON(); document.getElementById('saveOptionsModal').style.display='none'">
+                    <i class="fas fa-archive"></i> <strong>Proyecto Completo</strong>
+                    <span style="font-size: 0.8em; margin-left: auto; opacity: 0.8;">(Todo)</span>
+                </button>
+                
+                <button class="btn btn-info" style="width: 100%; justify-content: flex-start;" onclick="exportBudgetOnlyJSON(); document.getElementById('saveOptionsModal').style.display='none'">
+                    <i class="fas fa-file-contract"></i> <strong>Solo Presupuesto</strong>
+                    <span style="font-size: 0.8em; margin-left: auto; opacity: 0.8;">(Items B1)</span>
+                </button>
+                
+                <p style="font-size: 0.75rem; color: #a0aec0; margin-top: 15px;">
+                    "Solo Presupuesto" exporta los ítems y configuración, excluyendo el Banco y la Base de Insumos global.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteOptionsModal" class="modal" style="z-index: 3200;">
+        <div class="modal-content" style="max-width: 350px; height: auto; margin-top: 20vh;">
+            <div class="modal-header" style="background: var(--danger); color: white;">
+                <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-trash-alt"></i> Opciones de Borrado</h3>
+                <span style="font-size:24px; cursor:pointer;" onclick="closeDeleteModal()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px; text-align: center;">
+                <p style="color: var(--text-primary); margin-bottom: 20px;">¿Qué deseas eliminar?</p>
+                
+                <button class="btn btn-warning" style="width: 100%; margin-bottom: 10px; justify-content: flex-start;" onclick="clearBudgetOnly()">
+                    <i class="fas fa-file-contract"></i> <strong>Solo Presupuesto</strong>
+                    <span style="font-size: 0.8em; margin-left: auto; opacity: 0.8;">(Items B1)</span>
+                </button>
+                
+                <button class="btn btn-danger" style="width: 100%; justify-content: flex-start;" onclick="confirmFullReset()">
+                    <i class="fas fa-bomb"></i> <strong>Borrar Todo</strong>
+                    <span style="font-size: 0.8em; margin-left: auto; opacity: 0.8;">(Fábrica)</span>
+                </button>
+                
+                <p style="font-size: 0.75rem; color: #a0aec0; margin-top: 15px;">
+                    "Solo Presupuesto" vacía la lista actual pero MANTIENE tu Banco de Ítems y Base de Insumos.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="unifyModal" class="modal" style="z-index: 3500;">
+        <div class="modal-content" style="max-width: 500px; height: auto; max-height: 80vh;">
+            <div class="modal-header">
+                <h3 style="margin:0;"><i class="fas fa-random"></i> Elegir Insumo Correcto</h3>
+                <span style="font-size:24px; cursor:pointer;" onclick="closeUnifyModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: #4a5568; margin-bottom: 15px; text-align: center;">
+                    Has seleccionado <strong id="unify-count">0</strong> insumos similares.<br>
+                    Selecciona cuál es el <b>CORRECTO</b>. Los demás serán reemplazados por este en todo el presupuesto.
+                </p>
+                
+                <div id="unify-list-container" class="unify-list">
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; text-align: right;">
+                    <button class="btn btn-secondary" onclick="closeUnifyModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast para mensajes de la app -->
+    <div id="toast">Guardado automáticamente</div>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2026 PresuRE - v2.1 by NS</p>
+    </footer>
+
+    <!-- Toast PWA -->
+    <div id="pwa-toast"></div>
+
+    <script src="app.js"></script>
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js');
+            });
+        }
+    </script>
+</body>
+</html>
