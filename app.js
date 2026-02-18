@@ -2105,10 +2105,27 @@ async function exportProjectJSON() {
         fileName = `Proy_${pName}_${dia}${mes}${año}${fileExt}`;
     }
 
-    const blob = new Blob([finalContent], { type: "application/json;charset=utf-8" });
-    saveAs(blob, fileName);
+    if (useEncryption) {
+        // ... lógica de encriptación ...
+        finalContent = await encryptData(appData, password);
+        fileExt = ".presu";
+        fileName = `RESG_${pName}_${dia}${mes}${año}${fileExt}`;
+        
+        // CORRECCIÓN: Usar 'application/octet-stream' para evitar que el navegador añada .json
+        const blob = new Blob([finalContent], { type: "application/octet-stream" });
+        saveAs(blob, fileName);
+    } else {
+        // Guardado normal (JSON plano) - Aquí SÍ queremos application/json
+        finalContent = JSON.stringify(appData);
+        fileExt = ".json";
+        fileName = `Proy_${pName}_${dia}${mes}${año}${fileExt}`;
+        
+        const blob = new Blob([finalContent], { type: "application/json;charset=utf-8" });
+        saveAs(blob, fileName);
+    }
     
     showToast(`Guardado: ${fileName}`);
+    
     const modal = document.getElementById('saveOptionsModal');
     if(modal) modal.style.display = 'none';
 }
@@ -2207,17 +2224,21 @@ async function exportBankJSON() {
             // Encriptamos SOLO el array del banco
             finalContent = await encryptData(appData.itemBank, password);
             fileName = `Banco_Items_${dia}${mes}${año}.presudb`;
+            // CORRECCIÓN: Usar 'application/octet-stream'
+            const blob = new Blob([finalContent], { type: "application/octet-stream" });
+            saveAs(blob, fileName);
         } catch (e) {
             alert("Error de encriptación (Revisa HTTPS).");
             return;
         }
     } else {
+        // Guardado normal
         finalContent = JSON.stringify(appData.itemBank);
         fileName = `Banco_Items_${dia}${mes}${año}.json`;
+        
+        const blob = new Blob([finalContent], { type: "application/json;charset=utf-8" });
+        saveAs(blob, fileName);
     }
-
-    const blob = new Blob([finalContent], { type: "application/json;charset=utf-8" });
-    saveAs(blob, fileName);
     showToast("Banco exportado.");
 }
 
