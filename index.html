@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PresuRE v2.1</title>
     
     <meta name="theme-color" content="#1a365d">
@@ -31,21 +31,24 @@
     <!-- Header combinado -->
     <header class="app-header">
         <div class="header-content">
-            <div class="logo-area">
+            <div class="logo-area" style="position: relative; padding-bottom: 4px;">
                 <img src="icon-192.png" alt="Logo" class="logo-img">
-                <h1>PresuRE</h1>
-                <span id="save-indicator" class="status-dot" title="Estado de guardado"></span>
+                <h1 style="position: relative; margin: 0;">
+                    PresuRE
+                    <div id="save-indicator" class="save-line-title"></div>
+                </h1>
             </div>
+
             <div class="header-actions">
-                <button id="theme-toggle" class="icon-btn"><i class="fas fa-moon"></i></button> <!-- Modo oscuro y claro -->
-                <button class="btn btn-secondary" onclick="document.getElementById('fileProject').click()"><i class="fas fa-folder-open"></i> Abrir</button>
-                <button class="btn btn-success" onclick="openSaveOptionsModal()"><i class="fas fa-save"></i> Guardar</button>
-                <button class="btn btn-secondary" onclick="openConfigModal()" title="Configuración"><i class="fas fa-cog"></i> Configuración</button>
-                <button class="btn btn-info" onclick="openReportModal()" title="Generar Reportes"><i class="fas fa-print"></i> Reportes</button>
-                <button class="btn btn-danger" onclick="openDeleteModal()" title="Opciones de Borrado"><i class="fas fa-trash-alt"></i> Borrar</button>
+                <button class="btn" onclick="document.getElementById('fileProject').click()"><i class="fas fa-folder-open"></i> Abrir</button>
+                <button class="btn" onclick="openSaveOptionsModal()"><i class="fas fa-save"></i> Guardar</button>
+                <button class="btn" onclick="openConfigModal()" title="Configuración"><i class="fas fa-cog"></i> Configuración</button>
+                <button class="btn" onclick="openReportModal()" title="Generar Reportes"><i class="fas fa-print"></i> Reportes</button>
+                <button class="btn" onclick="openDeleteModal()" title="Opciones de Borrado"><i class="fas fa-trash-alt"></i> Borrar</button>
+                <button id="theme-toggle" class="btn"><i class="fas fa-moon"></i></button> <!-- Modo oscuro y claro -->
         
                 <button id="install-btn" class="install-btn hidden"><i class="fas fa-download"></i> Instalar</button>
-                <input type="file" id="fileProject" accept=".json,.presu,application/json" style="display:none" onchange="loadProjectJSON(this)">
+                <input type="file" id="fileProject" accept=".json,application/json,text/json,text/plain" style="display:none" onchange="loadProjectJSON(this)">
             </div>
         </div>
     </header>
@@ -56,20 +59,20 @@
             <div class="nav-icon"><i class="fas fa-file-invoice-dollar"></i></div>
             <span class="nav-label">Presu</span>
         </button>
-            
+        
         <button class="nav-item tab" onclick="switchTab('items')">
-                <div class="nav-icon"><i class="fas fa-database"></i></div>
-                <span class="nav-label">Banco</span>
+            <div class="nav-icon"><i class="fas fa-database"></i></div>
+            <span class="nav-label">Banco</span>
         </button>
-            
+        
         <button class="nav-item tab" onclick="switchTab('db')">
-                <div class="nav-icon"><i class="fas fa-cubes"></i></div>
-                <span class="nav-label">Insumos</span>
+            <div class="nav-icon"><i class="fas fa-cubes"></i></div>
+            <span class="nav-label">Insumos</span>
         </button>
-            
+        
         <button class="nav-item tab" onclick="switchTab('calc')">
-                <div class="nav-icon"><i class="fas fa-calculator"></i></div>
-                <span class="nav-label">Calcu</span>
+            <div class="nav-icon"><i class="fas fa-calculator"></i></div>
+            <span class="nav-label">Calcu</span>
         </button>
     </nav>
 
@@ -91,7 +94,7 @@
                         </button>
                     </div>
                     
-                    <div style="display:flex; gap:8px;">                    
+                    <div style="display:flex; gap:8px;">
                         <button class="btn btn-success" onclick="exportB1ToExcel()" title="Exportar presupuesto a Excel">
                             <i class="fas fa-file-excel"></i> Excel
                         </button>
@@ -167,82 +170,9 @@
             </div>
         </div>
 
-        <!-- Panel Calculadora -->
-        <div id="panel-calc" class="panel">
-            <div style="background:var(--bg-card-alt); padding:15px; border-radius:8px; border:1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:15px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom:15px; border-bottom:1px solid var(--bg-card-alt); padding-bottom:10px;">
-                    <h2 style="margin:0; color:var(--text-primary); font-size:1.3rem;">
-                        Calculadora de Materiales
-                    </h2>
-                    <button onclick="printCalcReport()" class="btn-primary" style="background-color: var(--accent); padding: 8px 16px; font-size: 0.9rem; border: none; transition: opacity 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                        <i class="fas fa-print"></i> Imprimir Reporte
-                    </button>
-                </div>
-                
-                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
-    
-                    <div class="calc-search-container">
-                        <label class="font-bold" style="display:block; margin-bottom:4px; color:var(--text-secondary); font-size:0.85rem;">1. Buscar Ítem (APU):</label>
-                        <div style="position:relative;">
-                            <i class="fas fa-search search-icon-inside"></i>
-                            <input type="text" id="calc-search-input" placeholder="Escribe para buscar..." 
-                                onkeyup="searchCalcItem()" 
-                                style="padding-left:35px; width:100%; height:38px;">
-                        </div>
-                        <div id="calc-search-results" style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:0 0 6px 6px; z-index:100; box-shadow:var(--shadow);"></div>
-                    </div>
-
-                    <div style="flex: 2; min-width:200px; background:var(--bg-card); padding:8px 12px; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-wrap:wrap; align-items:center; gap:5px; overflow:hidden;">
-                        <div id="calc-selected-name" style="flex:1 1 auto; min-width:0; font-weight:700; color:var(--text-primary); font-size:0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            - Seleccione ítem -                            
-                        </div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary); display:flex; gap:5px; white-space: nowrap;">
-                            Unidad: <span id="calc-selected-unit" style="font-weight:600;">-</span>
-                        </div>
-                    </div>
-
-                    <style>
-                    @media (max-width: 400px) {
-                        #calc-selected-name {
-                            flex: 1 1 100% !important; /* Ocupa toda la fila */
-                            white-space: normal !important; /* Opcional: permite que el texto del nombre se envuelva en varias líneas */
-                        }
-                    }
-                    </style>
-
-                    <div style="width:120px;">
-                        <label class="font-bold" style="display:block; margin-bottom:4px; color:var(--success); font-size:0.85rem;">2. Cant. Obra:</label>
-                        <input type="text" inputmode="decimal" id="calc-quantity" value="1" 
-                                onchange="this.value = solveMathExpression(this.value); recalcCalcTable()" 
-                                onkeypress="if(event.key === 'Enter') this.blur();"
-                                onfocus="this.select()" 
-                                style="height:38px; font-size:1.1rem; font-weight:bold; color:var(--success); border:2px solid var(--success); text-align:center; width:100%;">
-                    </div>
-                </div>     
-
-            </div>
-
-            <div class="table-container" style="margin-top:0;">
-                <table id="table-calc">
-                    <thead>
-                        <tr>
-                            <th style="width:40%">Descripción insu.</th>
-                            <th style="width:10%">Und.</th>
-                            <th style="width:15%">Cant-Unit.</th>
-                            <th style="width:15%">Fact/Div</th>
-                            <th style="width:20%">Requerido</th>
-                        </tr>
-                    </thead>
-                    <tbody id="calc-body">
-                        <tr><td colspan="5" class="text-center" style="padding:20px; color:#718096;">Selecciona un ítem para calcular.</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <!-- Panel Banco de Ítems -->
         <div id="panel-items" class="panel">
-           <div style="margin-bottom:10px; padding:15px; background:var(--bg-card-alt); border-radius:6px;">
+            <div style="margin-bottom:10px; padding:15px; background:var(--bg-card-alt); border-radius:6px;">
                 <h2 style="margin:0 0 12px 0; color:var(--text-primary); font-size:1.5rem;">Banco de Ítems</h2>
                 <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content: space-between; align-items:center;">
                     <div style="display:flex; gap:8px;">
@@ -255,13 +185,13 @@
                         <button class="btn btn-warning" onclick="document.getElementById('fileBank').click()">
                             <i class="fas fa-download"></i> Importar
                         </button>
-                        <input type="file" id="fileBank" accept=".json,.presudb,application/json" style="display:none" onchange="importBankJSON(this)">
+                        <input type="file" id="fileBank" accept=".json,application/json" style="display:none" onchange="importBankJSON(this)">
                     </div>
                     
                     <div style="position:relative; flex-grow:1; max-width:350px;">
                         <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#a0aec0;"></i>
                         <input type="text" id="main-bank-search" placeholder="Buscar en el banco..." 
-                            onkeyup="currentPage.bank=1; renderBankList()" 
+                            oninput="handleBankSearch()" 
                             style="width:100%; padding:10px 10px 10px 35px; border-radius:6px; border:1px solid var(--border-color);">
                     </div>
                 </div>
@@ -521,7 +451,7 @@
                         </button>
                     </div>
                 </div>
-                <p style="font-size: 0.8rem; color: #718096; margin-top: 8px;">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
                     <i class="fas fa-sort"></i> Toca los títulos para ordenar. La numeración se auto-ajusta (1, 2, 3...) según el orden.
                 </p>
             </div>
@@ -623,6 +553,79 @@
             </div>
         </div>
 
+        <!-- Panel Calculadora -->
+        <div id="panel-calc" class="panel">
+            <div style="background:var(--bg-card-alt); padding:15px; border-radius:8px; border:1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom:15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom:15px; border-bottom:1px solid var(--bg-card-alt); padding-bottom:10px;">
+                    <h2 style="margin:0; color:var(--text-primary); font-size:1.3rem;">
+                        Calculadora de Materiales
+                    </h2>
+                    <button onclick="printCalcReport()" class="btn btn-primary" style="padding: 8px 16px; font-size: 0.9rem;">
+                        <i class="fas fa-print"></i> Imprimir Reporte
+                    </button>
+                </div>
+                
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    
+                    <div class="calc-search-container">
+                        <label class="font-bold" style="display:block; margin-bottom:4px; color:var(--text-secondary); font-size:0.85rem;">1. Buscar Ítem (APU):</label>
+                        <div style="position:relative;">
+                            <i class="fas fa-search search-icon-inside"></i>
+                            <input type="text" id="calc-search-input" placeholder="Escribe para buscar..." 
+                                oninput="handleCalcSearch()"
+                                style="padding-left:35px; width:100%; height:38px;">
+                        </div>
+                        <div id="calc-search-results" style="display:none; position:absolute; top:100%; left:0; width:100%; max-height:200px; overflow-y:auto; background:var(--bg-card); border:1px solid var(--border-color); border-radius:0 0 6px 6px; z-index:100; box-shadow:var(--shadow);"></div>
+                    </div>
+
+                    <div style="flex: 2; min-width:200px; background:var(--bg-card); padding:8px 12px; border-radius:6px; border:1px solid var(--border-color); display:flex; flex-wrap:wrap; align-items:center; gap:5px; overflow:hidden;">
+                        <div id="calc-selected-name" style="flex:1 1 auto; min-width:0; font-weight:700; color:var(--text-primary); font-size:0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            - Seleccione ítem -                            
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary); display:flex; gap:5px; white-space: nowrap;">
+                            Unidad: <span id="calc-selected-unit" style="font-weight:600;">-</span>
+                        </div>
+                    </div>
+
+                    <style>
+                    @media (max-width: 400px) {
+                        #calc-selected-name {
+                            flex: 1 1 100% !important; /* Ocupa toda la fila */
+                            white-space: normal !important; /* Opcional: permite que el texto del nombre se envuelva en varias líneas */
+                        }
+                    }
+                    </style>
+
+                    <div style="width:120px;">
+                        <label class="font-bold" style="display:block; margin-bottom:4px; color:var(--success); font-size:0.85rem;">2. Cant. Obra:</label>
+                        <input type="text" inputmode="decimal" id="calc-quantity" value="1" 
+                                onchange="this.value = solveMathExpression(this.value); recalcCalcTable()" 
+                                onkeypress="if(event.key === 'Enter') this.blur();"
+                                onfocus="this.select()" 
+                                style="height:38px; font-size:1.1rem; font-weight:bold; color:var(--success); border:2px solid var(--success); text-align:center; width:100%;">
+                    </div>
+                </div>     
+
+            </div>
+
+            <div class="table-container" style="margin-top:0;">
+                <table id="table-calc">
+                    <thead>
+                        <tr>
+                            <th style="width:40%">Descripción insu.</th>
+                            <th style="width:10%">Und.</th>
+                            <th style="width:15%">Cant-Unit.</th>
+                            <th style="width:15%">Fact/Div</th>
+                            <th style="width:20%">Requerido</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calc-body">
+                        <tr><td colspan="5" class="text-center" style="padding:20px; color:#718096;">Selecciona un ítem para calcular.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div> <!-- fin container -->
 
     <!-- Modales -->
@@ -640,8 +643,8 @@
             <div class="modal-body">
                 <div style="position:relative; margin-bottom:15px;">
                     <i class="fas fa-search" style="position:absolute; left:15px; top:50%; transform:translateY(-50%); color:#718096;"></i>
-                    <input type="text" id="modal-search" placeholder="Buscar insumo por descripción o código..." 
-                        onkeyup="filterModalList()" 
+                    <input type="text" id="modal-search" placeholder="Buscar insumo por descripción o código..."
+                        oninput="handleModalSearch()" 
                         style="width:100%; padding:12px 12px 12px 45px; font-size:0.95rem; border:2px solid var(--accent); border-radius:6px;">
                 </div>
                 <div style="height:calc(100% - 60px); overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;">
@@ -663,7 +666,7 @@
     </div>
 
     <div id="conflictModal" class="modal" style="z-index: 2500;">
-        <div class="modal-content" style="max-width: 400px; height: auto; margin-top: 15vh;">
+        <div class="modal-content modal-sm" style="margin-top: 15vh;">
             <div class="modal-header" style="background-color: var(--warning); color: #000;">
                 <h3 style="margin:0; font-size:1.2rem;">
                     <i class="fas fa-exclamation-triangle"></i> Insumo Duplicado
@@ -681,7 +684,7 @@
                         <i class="fas fa-times"></i> Descartar
                     </button>
                 </div>
-                <p style="font-size: 0.85rem; color: #718096; margin-top: 15px;">
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 15px;">
                     <b>Reemplazar:</b> Actualiza los datos (precio/unidad) del insumo existente.
                 </p>
             </div>
@@ -702,7 +705,7 @@
             <div class="modal-body">
                 <div style="position:relative; margin-bottom:12px;">
                     <i class="fas fa-search" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#718096;"></i>
-                    <input type="text" id="bank-search" placeholder="Buscar actividad por nombre o código..." onkeyup="filterBankModal()" 
+                    <input type="text" id="bank-search" placeholder="Buscar actividad por nombre o código..." oninput="handleBankModalSearch()" 
                         style="width:100%; padding:10px 10px 10px 35px; border-radius:6px; border:1px solid var(--border-color);">
                 </div>
                 <div style="overflow-y:auto; flex-grow:1; border:1px solid #e2e8f0; border-radius:6px;">
@@ -724,7 +727,7 @@
     </div>
 
     <div id="insumosModal" class="modal">
-        <div class="modal-content" style="max-width: 95%; max-height: 95%; width: 95%; height: 95%;">
+        <div class="modal-content modal-xl">
             <div class="modal-header">
                 <h3 id="insumosModalTitle" style="margin:0; font-size:1.3rem;">
                     <i class="fas fa-list-alt"></i> <span id="modalTipoInsumo">Materiales</span> Usados en Presupuesto
@@ -773,8 +776,8 @@
     </div>
 
     <div id="configModal" class="modal">
-        <div class="config-modal-content">
-            <div class="config-modal-header">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
                 <h3 style="margin:0; font-size:1.3rem;">
                     <i class="fas fa-cog"></i> Configuración Global
                 </h3>
@@ -783,7 +786,7 @@
                     onmouseover="this.style.opacity='1'" 
                     onmouseout="this.style.opacity='0.8'">&times;</span>
             </div>
-            <div class="config-modal-body">
+            <div class="modal-body">
 
                 <label class="font-bold" style="color:var(--purple); display:block; margin-bottom:8px;">
                     <i class="fas fa-list-ol"></i> Formato de Números (Miles y Decimales):
@@ -953,7 +956,7 @@
     </div>
 
     <div id="saveOptionsModal" class="modal" style="z-index: 3100;">
-        <div class="modal-content" style="max-width: 350px; height: auto; margin-top: 20vh;">
+        <div class="modal-content modal-sm" style="margin-top: 20vh;">
             <div class="modal-header" style="background: var(--success); color: white;">
                 <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-save"></i> Opciones de Guardado</h3>
                 <span style="font-size:24px; cursor:pointer;" onclick="document.getElementById('saveOptionsModal').style.display='none'">&times;</span>
@@ -971,7 +974,7 @@
                     <span style="font-size: 0.8em; margin-left: auto; opacity: 0.8;">(Items B1)</span>
                 </button>
                 
-                <p style="font-size: 0.75rem; color: #a0aec0; margin-top: 15px;">
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 15px;">
                     "Solo Presupuesto" exporta los ítems y configuración, excluyendo el Banco y la Base de Insumos global.
                 </p>
             </div>
@@ -979,7 +982,7 @@
     </div>
 
     <div id="deleteOptionsModal" class="modal" style="z-index: 3200;">
-        <div class="modal-content" style="max-width: 350px; height: auto; margin-top: 20vh;">
+        <div class="modal-content modal-sm" style="margin-top: 20vh;">
             <div class="modal-header" style="background: var(--danger); color: white;">
                 <h3 style="margin:0; font-size:1.1rem;"><i class="fas fa-trash-alt"></i> Opciones de Borrado</h3>
                 <span style="font-size:24px; cursor:pointer;" onclick="closeDeleteModal()">&times;</span>
@@ -997,7 +1000,7 @@
                     <span style="font-size: 0.8em; margin-left: auto; opacity: 0.8;">(Fábrica)</span>
                 </button>
                 
-                <p style="font-size: 0.75rem; color: #a0aec0; margin-top: 15px;">
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 15px;">
                     "Solo Presupuesto" vacía la lista actual pero MANTIENE tu Banco de Ítems y Base de Insumos.
                 </p>
             </div>
@@ -1005,13 +1008,13 @@
     </div>
 
     <div id="unifyModal" class="modal" style="z-index: 3500;">
-        <div class="modal-content" style="max-width: 500px; height: auto; max-height: 80vh;">
+        <div class="modal-content modal-md">
             <div class="modal-header">
                 <h3 style="margin:0;"><i class="fas fa-random"></i> Elegir Insumo Correcto</h3>
                 <span style="font-size:24px; cursor:pointer;" onclick="closeUnifyModal()">&times;</span>
             </div>
             <div class="modal-body">
-                <p style="color: #4a5568; margin-bottom: 15px; text-align: center;">
+                <p style="color: var(--text-secondary); margin-bottom: 15px; text-align: center;">
                     Has seleccionado <strong id="unify-count">0</strong> insumos similares.<br>
                     Selecciona cuál es el <b>CORRECTO</b>. Los demás serán reemplazados por este en todo el presupuesto.
                 </p>
@@ -1026,25 +1029,20 @@
         </div>
     </div>
 
-    <!-- Toast para mensajes de la app -->
+    <!-- Toast para mensajes -->
     <div id="toast">Guardado automáticamente</div>
 
-    <!-- Footer -->
+    <!-- Footer  -->
     <footer>
-        <p>&copy; 2026 PresuRE - v2.1 by NS</p>
+        <p>&copy; 2026 PresuRE - v2.1</p>
     </footer>
 
     <!-- Toast PWA -->
     <div id="pwa-toast"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+
     <script src="app.js"></script>
-    
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js');
-            });
-        }
-    </script>
+
 </body>
 </html>

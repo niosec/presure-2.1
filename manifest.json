@@ -9,7 +9,10 @@
   "theme_color": "#1a365d",
   "orientation": "any",
   "description": "Calculadora de presupuestos rápida y eficiente",
-  "categories": ["productivity", "utilities"],
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
   "icons": [
     {
       "src": "icon-192.png",

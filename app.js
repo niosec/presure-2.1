@@ -1,120 +1,27 @@
 /**
- * PresuRE v2.1 - Lógica completa fusionada
- * Contiene toda la funcionalidad de la v1.3 más el modo oscuro y PWA de la v2.0
+ * PresuRE v2.1 - Lógica Principal de la Aplicación
  */
-// --- MOTOR DE SEGURIDAD (AES-GCM) V2 ---
-const SECURITY = {
-    algo: 'AES-GCM',
-    length: 256,
-    saltLen: 16,
-    ivLen: 12,
-    iter: 100000
-};
-
-// Utilidades de conversión (ArrayBuffer <-> Base64)
-const ab2str = (buf) => {
-    let binary = '';
-    const bytes = new Uint8Array(buf);
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-    return window.btoa(binary);
-};
-
-const str2ab = (str) => {
-    const binary_string = window.atob(str);
-    const len = binary_string.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binary_string.charCodeAt(i);
-    return bytes.buffer;
-};
-
-// Generar llave derivada de contraseña
-async function generateKey(password, salt) {
-    if (!window.crypto || !window.crypto.subtle) {
-        alert("ERROR CRÍTICO: Tu navegador bloquea la encriptación.\n\nAsegúrate de usar 'localhost' o 'https://'.\nLa encriptación no funciona con doble clic en el archivo (file://).");
-        throw new Error("Crypto API not available");
-    }
-    const enc = new TextEncoder();
-    const keyMaterial = await window.crypto.subtle.importKey(
-        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
-    );
-    return window.crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt: salt, iterations: SECURITY.iter, hash: "SHA-256" },
-        keyMaterial, { name: SECURITY.algo, length: SECURITY.length }, false, ["encrypt", "decrypt"]
-    );
-}
-
-// Encriptar Datos
-async function encryptData(dataObject, password) {
-    try {
-        const salt = window.crypto.getRandomValues(new Uint8Array(SECURITY.saltLen));
-        const iv = window.crypto.getRandomValues(new Uint8Array(SECURITY.ivLen));
-        const key = await generateKey(password, salt);
-        
-        const contentStr = JSON.stringify(dataObject);
-        const contentEncoded = new TextEncoder().encode(contentStr);
-        
-        const encryptedContent = await window.crypto.subtle.encrypt(
-            { name: SECURITY.algo, iv: iv }, key, contentEncoded
-        );
-
-        return JSON.stringify({
-            _secure: true, // Marca de archivo seguro
-            v: 2,
-            salt: ab2str(salt),
-            iv: ab2str(iv),
-            content: ab2str(encryptedContent)
-        });
-    } catch (e) {
-        console.error("Error encriptando:", e);
-        throw e;
-    }
-}
-
-// Desencriptar Datos
-async function decryptData(encryptedJsonString, password) {
-    try {
-        const pkg = JSON.parse(encryptedJsonString);
-        if (!pkg._secure) return pkg; // Si no es seguro, devolver tal cual
-
-        const salt = str2ab(pkg.salt);
-        const iv = str2ab(pkg.iv);
-        const content = str2ab(pkg.content);
-        
-        const key = await generateKey(password, salt);
-
-        const decryptedBuffer = await window.crypto.subtle.decrypt(
-            { name: SECURITY.algo, iv: iv }, key, content
-        );
-        
-        const decryptedStr = new TextDecoder().decode(decryptedBuffer);
-        return JSON.parse(decryptedStr);
-    } catch (e) {
-        console.error("Fallo desencriptación:", e);
-        throw new Error("Clave incorrecta o archivo dañado");
-    }
-}
-
 // --- CONSTANTES ---
 const STORAGE_KEY = 'costos_bolivia_data';
 const initialDB = {
     materiales: [
-        {code:"1", desc:"Cemento portland", unit:"kg", price:1.26},
-        {code:"2", desc:"Arena fina", unit:"m3", price:150},
-        {code:"3", desc:"Grava", unit:"m3", price:160}
+        { code: "1", desc: "Cemento portland", unit: "kg", price: 1.26 },
+        { code: "2", desc: "Arena fina", unit: "m3", price: 150 },
+        { code: "3", desc: "Grava", unit: "m3", price: 160 }
     ],
     mano_obra: [
-        {code:"1", desc:"Albañil", unit:"hr", price:20},
-        {code:"2", desc:"Ayudante", unit:"hr", price:15}
+        { code: "1", desc: "Albañil", unit: "hr", price: 20 },
+        { code: "2", desc: "Ayudante", unit: "hr", price: 15 }
     ],
     equipos: [
-        {code:"1", desc:"Mezcladora", unit:"hr", price:28.67},
-        {code:"2", desc:"Vibradora", unit:"hr", price:21}
+        { code: "1", desc: "Mezcladora", unit: "hr", price: 28.67 },
+        { code: "2", desc: "Vibradora", unit: "hr", price: 21 }
     ]
 };
 
 // --- ESTADO GLOBAL ---
 let appData = {
-    settings: { 
+    settings: {
         social: 55.00, iva_mo: 14.94, tools: 5.00, gg: 10.00, util: 10.00, it: 3.09,
         decimals_yield: 5,
         decimals_price: 3,
@@ -134,7 +41,6 @@ let editorContext = null;
 let currentEditId = null;
 let editorBackup = null;
 let isCreatingNew = false;
-let lastToastTime = 0;
 
 let dbSortState = {
     materiales: { field: 'desc', dir: 1 },
@@ -156,7 +62,6 @@ let currentPage = {
 const itemsPerPage = 50;
 let saveTimeout;
 
-let editorSourceArray = [];
 let currentEditField = null;
 let currentEditRow = null;
 let currentEditType = null;
@@ -166,6 +71,20 @@ let selectedBankIds = new Set();
 let deferredPrompt;
 
 // --- FUNCIONES AUXILIARES ---
+// --- FUNCIONES DE DEBOUNCE (Búsquedas Optimizadas) ---
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+// Envoltorios debounced para nuestras funciones de búsqueda (300ms de espera)
+const handleBankSearch = debounce(() => { currentPage.bank = 1; renderBankList(); }, 300);
+const handleModalSearch = debounce(filterModalList, 300);
+const handleBankModalSearch = debounce(filterBankModal, 300);
+const handleCalcSearch = debounce(searchCalcItem, 300);
 
 function escapeHtml(text) {
     if (text == null) return "";
@@ -183,10 +102,10 @@ function solveMathExpression(value) {
     if (clean.startsWith('=')) clean = clean.substring(1);
 
     const format = appData.settings.numberFormat || 'intl';
-    
+
     let tempCheck = clean;
     if (format === 'euro' || format === 'latam') {
-        tempCheck = clean.replace(/,/g, '.'); 
+        tempCheck = clean.replace(/,/g, '.');
     }
 
     if (/^[\d\.\,\+\-\*\/\(\)\s]+$/.test(clean)) {
@@ -213,15 +132,15 @@ function solveMathExpression(value) {
 function parseNumber(value, allowExpressions = false) {
     if (typeof value === 'number') return isNaN(value) ? 0 : value;
     if (value === null || value === undefined) return 0;
-    
+
     let clean = value.toString().trim();
     if (clean === '' || clean === '-') return 0;
-    
+
     if (allowExpressions) return solveMathExpression(value);
-    
+
     const format = appData.settings.numberFormat || 'intl';
-    
-    switch(format) {
+
+    switch (format) {
         case 'euro':
             clean = clean.replace(/\./g, '');
             clean = clean.replace(/,/g, '.');
@@ -235,7 +154,7 @@ function parseNumber(value, allowExpressions = false) {
             clean = clean.replace(/,/g, '.');
             break;
     }
-    
+
     const result = parseFloat(clean);
     if (!isFinite(result) || isNaN(result)) return 0;
     if (Math.abs(result) > 1e15) return 0;
@@ -246,7 +165,7 @@ function roundToConfig(value, type = 'total') {
     if (value === null || value === undefined || isNaN(value)) return 0;
     let decimals;
     const settings = appData.settings;
-    switch(type) {
+    switch (type) {
         case 'yield': decimals = settings.decimals_yield; break;
         case 'price': decimals = settings.decimals_price; break;
         case 'partial': decimals = settings.decimals_partial; break;
@@ -261,7 +180,7 @@ function formatNumber(value, type = 'total') {
     if (value === null || value === undefined || isNaN(value)) return '0';
     const settings = appData.settings;
     let decimals;
-    switch(type) {
+    switch (type) {
         case 'yield': decimals = settings.decimals_yield; break;
         case 'price': decimals = settings.decimals_price; break;
         case 'partial': decimals = settings.decimals_partial; break;
@@ -275,7 +194,7 @@ function formatNumber(value, type = 'total') {
     let integerPart = parts[0];
     let decimalPart = parts[1] || '';
     const format = settings.numberFormat || 'intl';
-    switch(format) {
+    switch (format) {
         case 'intl':
             integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
             return decimalPart ? `${integerPart}.${decimalPart}` : integerPart;
@@ -325,41 +244,65 @@ function showToast(message) {
     const x = document.getElementById("toast");
     x.textContent = message;
     x.className = "show";
-    setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+    setTimeout(function () { x.className = x.className.replace("show", ""); }, 3000);
 }
 
-// --- PERSISTENCIA ---
+// --- PERSISTENCIA (Migrada a IndexedDB con localForage) ---
 function saveData() {
     const indicator = document.getElementById('save-indicator');
-    if(indicator) {
-        indicator.classList.add('unsaved');
-        indicator.title = "Guardando cambios...";
+    
+    // 1. Mostrar que está guardando
+    if (indicator) {
+        indicator.classList.remove('saved', 'fade');
+        indicator.classList.add('saving');
     }
+    
     clearTimeout(saveTimeout);
+
     saveTimeout = setTimeout(() => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-            if(indicator) {
-                indicator.classList.remove('unsaved');
-                indicator.title = "Todos los cambios guardados";
-            }
-        } catch (e) {
-            console.error("Error al guardar", e);
-            showToast('Error: Memoria llena. Exporta tu proyecto.');
-        }
+        localforage.setItem(STORAGE_KEY, appData)
+            .then(() => {
+                // 2. Mostrar que terminó
+                if (indicator) {
+                    indicator.classList.remove('saving');
+                    indicator.classList.add('saved');
+                    
+                    // 3. Empezar a desvanecer después de 1 segundo
+                    setTimeout(() => {
+                        indicator.classList.add('fade');
+                    }, 1000);
+                    
+                    // 4. Resetear el ancho a 0 cuando ya no se ve
+                    setTimeout(() => {
+                        indicator.classList.remove('saved', 'fade');
+                    }, 2000);
+                }
+            })
+            .catch(err => {
+                console.error("Error al guardar en IndexedDB", err);
+                showToast('Error crítico: No se pudo guardar el proyecto.');
+                // En caso de error, podríamos poner la línea en rojo
+                if(indicator) {
+                    indicator.classList.remove('saving');
+                    indicator.style.backgroundColor = 'var(--danger)';
+                }
+            });
     }, 1500);
 }
 
-function loadFromStorage() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        try {
-            const parsed = JSON.parse(stored);
-            appData = { ...appData, ...parsed };
-            if(!appData.database) appData.database = JSON.parse(JSON.stringify(initialDB));
-            if(!appData.projectItems) appData.projectItems = [];
-            if(!appData.itemBank) appData.itemBank = [];
-            if(!appData.modules || appData.modules.length === 0) {
+async function loadFromStorage() {
+    try {
+        // Obtenemos el objeto directamente, sin JSON.parse
+        const stored = await localforage.getItem(STORAGE_KEY);
+
+        if (stored) {
+            appData = { ...appData, ...stored };
+
+            // --- Tu lógica original de inicialización se mantiene intacta ---
+            if (!appData.database) appData.database = JSON.parse(JSON.stringify(initialDB));
+            if (!appData.projectItems) appData.projectItems = [];
+            if (!appData.itemBank) appData.itemBank = [];
+            if (!appData.modules || appData.modules.length === 0) {
                 const defaultId = 'mod_' + Date.now();
                 appData.modules = [{ id: defaultId, name: "General" }];
                 appData.activeModuleId = defaultId;
@@ -371,55 +314,55 @@ function loadFromStorage() {
                     });
                 }
             });
-            if(!appData.settings) appData.settings = {};
+            if (!appData.settings) appData.settings = {};
             const defaults = { social: 55, iva_mo: 14.94, tools: 5, gg: 10, util: 10, it: 3.09, decimals_yield: 5, decimals_price: 3, decimals_total: 2, numberFormat: 'intl' };
             appData.settings = { ...defaults, ...appData.settings };
-        } catch(e) {
-            console.error("Error cargando LocalStorage", e);
-            localStorage.removeItem(STORAGE_KEY);
-        }
-    } else {
-        const defaultId = 'mod_' + Date.now();
-        appData.modules = [{ id: defaultId, name: "General" }];
-        appData.activeModuleId = defaultId;
-        ['materiales', 'mano_obra', 'equipos'].forEach(type => {
-            appData.database[type].forEach((item, idx) => {
-                item.id = Date.now() + idx + Math.floor(Math.random() * 10000);
+        } else {
+            // Valores por defecto si la base de datos está vacía
+            const defaultId = 'mod_' + Date.now();
+            appData.modules = [{ id: defaultId, name: "General" }];
+            appData.activeModuleId = defaultId;
+            ['materiales', 'mano_obra', 'equipos'].forEach(type => {
+                appData.database[type].forEach((item, idx) => {
+                    item.id = Date.now() + idx + Math.floor(Math.random() * 10000);
+                });
             });
-        });
+        }
+    } catch (e) {
+        console.error("Error cargando IndexedDB", e);
     }
 }
 
 // --- FUNCIONES DE NAVEGACIÓN Y RENDER (v1.3) ---
 function switchTab(tabId) {
     // 1. Lógica visual de cambio de pestaña (Código original)
+    localStorage.setItem('presure_active_tab', tabId);
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    
+
     let pId = '';
     if (tabId === 'b1') pId = 'b1';
     else if (tabId === 'items') pId = 'items';
     else if (tabId === 'db') pId = 'db';
     else if (tabId === 'calc') pId = 'calc';
     else pId = 'config';
-    
+
     const targetPanel = document.getElementById('panel-' + pId);
-    if(targetPanel) targetPanel.classList.add('active');
-    
+    if (targetPanel) targetPanel.classList.add('active');
+
     const tabs = document.querySelectorAll('.tab');
-    if(tabId === 'b1') tabs[0].classList.add('active');
-    if(tabId === 'items') tabs[1].classList.add('active');
-    if(tabId === 'db') tabs[2].classList.add('active');
-    if(tabId === 'calc') tabs[3].classList.add('active');
-    
+    if (tabId === 'b1') tabs[0].classList.add('active');
+    if (tabId === 'items') tabs[1].classList.add('active');
+    if (tabId === 'db') tabs[2].classList.add('active');
+    if (tabId === 'calc') tabs[3].classList.add('active');
+
     window.scrollTo(0, 0);
 
-    // --- CORRECCIÓN 5: Auto-foco Inteligente ---
+    // --- Auto-foco Inteligente ---
     setTimeout(() => {
         if (tabId === 'items') {
             // Foco en buscador del Banco
             const searchInput = document.getElementById('main-bank-search');
-            if (searchInput) { searchInput.focus(); searchInput.select(); }
         } else if (tabId === 'calc') {
             // Foco en buscador de Calculadora
             const searchInput = document.getElementById('calc-search-input');
@@ -436,7 +379,7 @@ function changePage(section, direction) {
     currentPage[section] += direction;
     if (currentPage[section] < 1) currentPage[section] = 1;
     if (currentPage[section] > totalPages) currentPage[section] = totalPages;
-    switch(section) {
+    switch (section) {
         case 'b1': renderB1(); break;
         case 'bank': renderBankList(); break;
         case 'db-mat': case 'db-mo': case 'db-eq': renderDBTables(); break;
@@ -444,7 +387,7 @@ function changePage(section, direction) {
 }
 
 function getTotalItemsForSection(section) {
-    switch(section) {
+    switch (section) {
         case 'b1': return appData.projectItems.filter(item => item.moduleId === appData.activeModuleId).length;
         case 'bank': return appData.itemBank.length;
         case 'db-mat': return appData.database.materiales.length;
@@ -480,7 +423,7 @@ function renderModuleTabs() {
         container.appendChild(tab);
     });
     const currentMod = appData.modules.find(m => m.id === appData.activeModuleId);
-    if(currentMod) document.getElementById('current-module-name-display').innerText = currentMod.name;
+    if (currentMod) document.getElementById('current-module-name-display').innerText = currentMod.name;
 }
 
 function switchModule(id) {
@@ -608,7 +551,7 @@ function renderB1() {
 
 function updateProjectItem(id, field, value) {
     const item = appData.projectItems.find(i => i.id === id);
-    if(item) {
+    if (item) {
         item[field] = (field === 'quantity') ? parseNumber(value) : value;
         saveData();
         if (field === 'quantity') updateRowCalculations(id);
@@ -625,7 +568,7 @@ function updateRowCalculations(itemId) {
     const roundedQty = roundToConfig(item.quantity, 'qty');
     const total = roundedUnitPrice * roundedQty;
     const totalCell = row.cells[6];
-    if(totalCell) totalCell.innerText = fmt(total, 'total');
+    if (totalCell) totalCell.innerText = fmt(total, 'total');
     recalculateTotalsDisplay();
 }
 
@@ -644,12 +587,12 @@ function recalculateTotalsDisplay() {
 }
 
 function createEmptyItemB1() {
-    const newItem = { 
+    const newItem = {
         id: Date.now() + Math.floor(Math.random() * 1000),
-        projectCode: "", 
-        description: "Nuevo Ítem", 
-        unit: "glb", 
-        quantity: 1, 
+        projectCode: "",
+        description: "Nuevo Ítem",
+        unit: "glb",
+        quantity: 1,
         materiales: [],
         mano_obra: [],
         equipos: [],
@@ -660,17 +603,17 @@ function createEmptyItemB1() {
     renderB1();
     setTimeout(() => {
         const rows = document.querySelectorAll('#b1-body tr');
-        if(rows.length > 0) {
+        if (rows.length > 0) {
             const lastRow = rows[rows.length - 1];
             const descInput = lastRow.querySelector('textarea');
-            if(descInput) { descInput.focus(); descInput.select(); }
+            if (descInput) { descInput.focus(); descInput.select(); }
         }
     }, 100);
 }
 
 function duplicateProjectItem(id) {
     const item = appData.projectItems.find(i => i.id === id);
-    if(!item) return;
+    if (!item) return;
     const newItem = JSON.parse(JSON.stringify(item));
     newItem.id = Date.now() + Math.floor(Math.random() * 1000);
     const index = appData.projectItems.indexOf(item);
@@ -681,7 +624,7 @@ function duplicateProjectItem(id) {
 }
 
 function deleteProjectItem(id) {
-    if(confirm("¿Eliminar este ítem del presupuesto?")) {
+    if (confirm("¿Eliminar este ítem del presupuesto?")) {
         appData.projectItems = appData.projectItems.filter(i => i.id !== id);
         saveData();
         renderB1();
@@ -690,12 +633,12 @@ function deleteProjectItem(id) {
 
 function saveProjectItemToBank(id) {
     const item = appData.projectItems.find(i => i.id === id);
-    if(!item) return;
-    if(confirm(`¿Guardar "${item.description}" en el Banco de Ítems?`)) {
+    if (!item) return;
+    if (confirm(`¿Guardar "${item.description}" en el Banco de Ítems?`)) {
         const newItem = JSON.parse(JSON.stringify(item));
-        newItem.id = Date.now() + Math.floor(Math.random() * 1000); 
-        newItem.code = getNextBankCode(); 
-        newItem.quantity = 1; 
+        newItem.id = Date.now() + Math.floor(Math.random() * 1000);
+        newItem.code = getNextBankCode();
+        newItem.quantity = 1;
         delete newItem.moduleId;
         appData.itemBank.push(newItem);
         saveData();
@@ -708,7 +651,7 @@ function getNextBankCode() {
     let max = 0;
     appData.itemBank.forEach(i => {
         const num = parseInt(i.code);
-        if(!isNaN(num) && num > max) max = num;
+        if (!isNaN(num) && num > max) max = num;
     });
     return max + 1;
 }
@@ -719,8 +662,8 @@ function renderBankList() {
     const tbody = document.getElementById('bank-body');
     const searchTerm = document.getElementById('main-bank-search')?.value.toLowerCase() || "";
     tbody.innerHTML = '';
-    let filteredItems = appData.itemBank.filter(item => 
-        item.description.toLowerCase().includes(searchTerm) || 
+    let filteredItems = appData.itemBank.filter(item =>
+        item.description.toLowerCase().includes(searchTerm) ||
         item.code.toString().includes(searchTerm)
     );
     filteredItems.sort((a, b) => a.description.localeCompare(b.description, undefined, { numeric: true, sensitivity: 'base' }));
@@ -759,12 +702,12 @@ function renderBankList() {
 }
 
 function createBankItem() {
-    const newItem = { 
-        id: Date.now() + Math.floor(Math.random() * 1000), 
-        code: getNextBankCode(), 
-        description: "Nuevo APU", 
-        unit: "m3", 
-        quantity: 1, 
+    const newItem = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        code: getNextBankCode(),
+        description: "Nuevo APU",
+        unit: "m3",
+        quantity: 1,
         materiales: [],
         mano_obra: [],
         equipos: []
@@ -772,16 +715,16 @@ function createBankItem() {
     appData.itemBank.push(newItem);
     saveData();
     renderBankList();
-    const newItemId = appData.itemBank[appData.itemBank.length-1].id;
+    const newItemId = appData.itemBank[appData.itemBank.length - 1].id;
     editItem('bank', newItemId, true);
     setTimeout(() => {
         const descInput = document.getElementById('apu-desc');
-        if(descInput) { descInput.focus(); descInput.select(); }
+        if (descInput) { descInput.focus(); descInput.select(); }
     }, 300);
 }
 
 function deleteBankItem(id) {
-    if(confirm("¿Eliminar este ítem del Banco?")) {
+    if (confirm("¿Eliminar este ítem del Banco?")) {
         appData.itemBank = appData.itemBank.filter(i => i.id !== id);
         saveData();
         renderBankList();
@@ -790,7 +733,7 @@ function deleteBankItem(id) {
 
 function addSingleItemToProject(id) {
     const item = appData.itemBank.find(i => i.id === id);
-    if(item) {
+    if (item) {
         let newItem = JSON.parse(JSON.stringify(item));
         newItem.id = Date.now() + Math.floor(Math.random() * 1000);
         newItem.quantity = 1;
@@ -808,19 +751,19 @@ function calculateUnitPrice(item) {
     const mo = item.mano_obra || [];
     const eqs = item.equipos || [];
 
-    const sumMat = mats.reduce((a,b)=>a+(b.qty*b.price),0);
-    const sumMo = mo.reduce((a,b)=>a+(b.qty*b.price),0);
-    
-    const totalMo = sumMo + (sumMo*(s.social/100)) + ((sumMo+(sumMo*(s.social/100)))*(s.iva_mo/100));
-    
-    const sumEq = eqs.reduce((a,b)=>a+(b.qty*b.price),0);
-    const totalEq = sumEq + (totalMo*(s.tools/100));
-    
+    const sumMat = mats.reduce((a, b) => a + (b.qty * b.price), 0);
+    const sumMo = mo.reduce((a, b) => a + (b.qty * b.price), 0);
+
+    const totalMo = sumMo + (sumMo * (s.social / 100)) + ((sumMo + (sumMo * (s.social / 100))) * (s.iva_mo / 100));
+
+    const sumEq = eqs.reduce((a, b) => a + (b.qty * b.price), 0);
+    const totalEq = sumEq + (totalMo * (s.tools / 100));
+
     const direct = sumMat + totalMo + totalEq;
-    const gg = direct * (s.gg/100);
-    const util = (direct + gg) * (s.util/100);
-    const it = (direct + gg + util) * (s.it/100);
-    
+    const gg = direct * (s.gg / 100);
+    const util = (direct + gg) * (s.util / 100);
+    const it = (direct + gg + util) * (s.it / 100);
+
     return direct + gg + util + it;
 }
 
@@ -831,7 +774,7 @@ function editItem(context, id, isNew = false) {
     currentEditId = id;
     isCreatingNew = isNew;
     let item = (context === 'project') ? appData.projectItems.find(i => i.id === id) : appData.itemBank.find(i => i.id === id);
-    if(!item) return;
+    if (!item) return;
     editorBackup = JSON.parse(JSON.stringify(item));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel-editor').classList.add('active');
@@ -871,12 +814,12 @@ function renderAPUTables(item) {
     const s = appData.settings;
     const mat = createRows(item.materiales, 'materiales');
     const tableMat = document.querySelector('#table-mat tbody');
-    if(tableMat) tableMat.innerHTML = mat.html;
+    if (tableMat) tableMat.innerHTML = mat.html;
     setText('sub-mat', fmt(mat.sum, 'partial'));
 
     const mo = createRows(item.mano_obra, 'mano_obra');
     const tableMo = document.querySelector('#table-mo tbody');
-    if(tableMo) tableMo.innerHTML = mo.html;
+    if (tableMo) tableMo.innerHTML = mo.html;
     const socVal = mo.sum * (s.social / 100);
     const ivaVal = (mo.sum + socVal) * (s.iva_mo / 100);
     const totalMo = mo.sum + socVal + ivaVal;
@@ -889,7 +832,7 @@ function renderAPUTables(item) {
 
     const eq = createRows(item.equipos, 'equipos');
     const tableEq = document.querySelector('#table-eq tbody');
-    if(tableEq) tableEq.innerHTML = eq.html;
+    if (tableEq) tableEq.innerHTML = eq.html;
     const toolsVal = totalMo * (s.tools / 100);
     const totalEq = eq.sum + toolsVal;
     setText('eq-basic', fmt(eq.sum, 'partial'));
@@ -919,17 +862,17 @@ function renderAPUTables(item) {
 
 function updateEditorMeta() {
     let item = (editorContext === 'project') ? appData.projectItems.find(i => i.id === currentEditId) : appData.itemBank.find(i => i.id === currentEditId);
-    if(!item) return;
+    if (!item) return;
     item.description = document.getElementById('apu-desc').value;
     item.unit = document.getElementById('apu-unit').value;
-    if(editorContext === 'project') item.quantity = parseNumber(document.getElementById('apu-qty').value);
+    if (editorContext === 'project') item.quantity = parseNumber(document.getElementById('apu-qty').value);
     saveData();
 }
 
 function updateRes(type, idx, field, val) {
     let item = (editorContext === 'project') ? appData.projectItems.find(i => i.id === currentEditId) : appData.itemBank.find(i => i.id === currentEditId);
-    if(!item) return;
-    if(field === 'qty' || field === 'price') {
+    if (!item) return;
+    if (field === 'qty' || field === 'price') {
         item[type][idx][field] = parseNumber(val);
     } else {
         item[type][idx][field] = val;
@@ -940,8 +883,8 @@ function updateRes(type, idx, field, val) {
 
 function removeRes(type, idx) {
     let item = (editorContext === 'project') ? appData.projectItems.find(i => i.id === currentEditId) : appData.itemBank.find(i => i.id === currentEditId);
-    if(!item) return;
-    if(confirm("¿Eliminar este recurso?")) {
+    if (!item) return;
+    if (confirm("¿Eliminar este recurso?")) {
         item[type].splice(idx, 1);
         renderAPUTables(item);
         saveData();
@@ -1010,18 +953,18 @@ function hasUnsavedChanges() {
 }
 
 function discardEditor() {
-    if(!editorBackup) { closeEditor(); return; }
-    if(confirm("¿Descartar cambios y salir?")) {
+    if (!editorBackup) { closeEditor(); return; }
+    if (confirm("¿Descartar cambios y salir?")) {
         if (isCreatingNew) {
-            if(editorContext === 'project') appData.projectItems = appData.projectItems.filter(i => i.id !== currentEditId);
+            if (editorContext === 'project') appData.projectItems = appData.projectItems.filter(i => i.id !== currentEditId);
             else appData.itemBank = appData.itemBank.filter(i => i.id !== currentEditId);
         } else {
-            if(editorContext === 'project') {
+            if (editorContext === 'project') {
                 const idx = appData.projectItems.findIndex(i => i.id === currentEditId);
-                if(idx !== -1) appData.projectItems[idx] = editorBackup;
+                if (idx !== -1) appData.projectItems[idx] = editorBackup;
             } else {
                 const idx = appData.itemBank.findIndex(i => i.id === currentEditId);
-                if(idx !== -1) appData.itemBank[idx] = editorBackup;
+                if (idx !== -1) appData.itemBank[idx] = editorBackup;
             }
         }
         saveData();
@@ -1030,12 +973,12 @@ function discardEditor() {
 }
 
 function closeEditor() {
-    if(editorContext === 'project') { 
-        renderB1(); 
-        switchTab('b1'); 
-    } else { 
-        renderBankList(); 
-        switchTab('items'); 
+    if (editorContext === 'project') {
+        renderB1();
+        switchTab('b1');
+    } else {
+        renderBankList();
+        switchTab('items');
     }
     editorContext = null;
     currentEditId = null;
@@ -1067,12 +1010,12 @@ function quickCreateResource(type) {
         price: price,
         qty: 1
     };
-    let targetItem = (editorContext === 'project') ? 
-        appData.projectItems.find(i => i.id === currentEditId) : 
+    let targetItem = (editorContext === 'project') ?
+        appData.projectItems.find(i => i.id === currentEditId) :
         appData.itemBank.find(i => i.id === currentEditId);
     if (targetItem) {
         let targetArray = targetItem[type];
-        if(!targetArray) targetItem[type] = [];
+        if (!targetArray) targetItem[type] = [];
         targetItem[type].push(apuItem);
         renderAPUTables(targetItem);
         saveData();
@@ -1080,10 +1023,10 @@ function quickCreateResource(type) {
         setTimeout(() => {
             let tableId = (type === 'materiales') ? 'table-mat' : (type === 'mano_obra') ? 'table-mo' : 'table-eq';
             let rows = document.querySelectorAll(`#${tableId} tbody tr`);
-            if(rows.length > 0) {
+            if (rows.length > 0) {
                 let lastRow = rows[rows.length - 1];
                 let qtyInput = lastRow.querySelector('td:nth-child(3) input');
-                if(qtyInput) { qtyInput.focus(); qtyInput.select(); }
+                if (qtyInput) { qtyInput.focus(); qtyInput.select(); }
             }
         }, 100);
     }
@@ -1101,21 +1044,21 @@ function filterModalList() {
     const txt = document.getElementById('modal-search').value.toLowerCase();
     const tbody = document.getElementById('modal-list-body');
     tbody.innerHTML = '';
-    let list = [...appData.database[modalTargetType]].sort((a,b) => a.desc.localeCompare(b.desc));
+    let list = [...appData.database[modalTargetType]].sort((a, b) => a.desc.localeCompare(b.desc));
     let count = 0;
     const maxResults = 50;
     for (let i = 0; i < list.length; i++) {
         if (count >= maxResults) break;
         const item = list[i];
-        if(item.desc.toLowerCase().includes(txt) || (item.code && item.code.toString().toLowerCase().includes(txt))) {
+        if (item.desc.toLowerCase().includes(txt) || (item.code && item.code.toString().toLowerCase().includes(txt))) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="text-center" style="font-weight:600;">${item.code||''}</td>
+                <td class="text-center" style="font-weight:600;">${item.code || ''}</td>
                 <td>${item.desc}</td>
                 <td class="text-center">${item.unit}</td>
                 <td class="text-right" style="font-weight:600;">${fmt(item.price, 'price')}</td>
                 <td class="text-center"><button class="btn btn-primary btn-sm" title="Añadir"><i class="fas fa-plus"></i></button></td>`;
-            tr.onclick = function() {
+            tr.onclick = function () {
                 const newItem = { desc: item.desc, unit: item.unit, price: item.price, qty: 1 };
                 tryAddResource(newItem);
             };
@@ -1132,10 +1075,10 @@ function closeResourceModal() { document.getElementById('resourceModal').style.d
 
 function tryAddResource(newItem) {
     let tItem = (editorContext === 'project') ? appData.projectItems.find(i => i.id === currentEditId) : appData.itemBank.find(i => i.id === currentEditId);
-    if(!tItem) return;
-    let targetArray = (modalTargetType==='materiales') ? tItem.materiales :
-                     (modalTargetType==='mano_obra') ? tItem.mano_obra :
-                     tItem.equipos;
+    if (!tItem) return;
+    let targetArray = (modalTargetType === 'materiales') ? tItem.materiales :
+        (modalTargetType === 'mano_obra') ? tItem.mano_obra :
+            tItem.equipos;
     const duplicateIndex = targetArray.findIndex(r => r.desc.toLowerCase() === newItem.desc.toLowerCase());
     if (duplicateIndex >= 0) {
         conflictData = { tItem, targetArray, newItem, existingIndex: duplicateIndex };
@@ -1178,7 +1121,6 @@ function openItemBankModalForSelect() {
     selectedBankIds.clear();
     document.getElementById('bankModal').style.display = 'block';
     document.getElementById('bank-search').value = '';
-    document.getElementById('bank-search').focus();
     filterBankModal();
 }
 
@@ -1193,7 +1135,7 @@ function filterBankModal() {
     for (let i = 0; i < appData.itemBank.length; i++) {
         if (count >= maxResults) break;
         const item = appData.itemBank[i];
-        if(item.description.toLowerCase().includes(txt) || item.code.toString().includes(txt)) {
+        if (item.description.toLowerCase().includes(txt) || item.code.toString().includes(txt)) {
             const isChecked = selectedBankIds.has(item.id) ? 'checked' : '';
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -1237,8 +1179,8 @@ function updateBulkCounter() {
     const selectedCount = selectedBankIds.size;
     const btn = document.getElementById('btn-bulk-add');
     const countSpan = document.getElementById('selected-count');
-    if(countSpan) countSpan.innerText = selectedCount;
-    if(btn) btn.style.display = selectedCount > 0 ? 'inline-flex' : 'none';
+    if (countSpan) countSpan.innerText = selectedCount;
+    if (btn) btn.style.display = selectedCount > 0 ? 'inline-flex' : 'none';
 }
 
 function addSelectedBankItems() {
@@ -1246,9 +1188,9 @@ function addSelectedBankItems() {
     let addedCount = 0;
     selectedBankIds.forEach(id => {
         const item = appData.itemBank.find(i => i.id === id);
-        if(item) {
+        if (item) {
             let newItem = JSON.parse(JSON.stringify(item));
-            newItem.id = Date.now() + Math.floor(Math.random() * 10000) + addedCount; 
+            newItem.id = Date.now() + Math.floor(Math.random() * 10000) + addedCount;
             newItem.quantity = 1;
             newItem.moduleId = appData.activeModuleId;
             appData.projectItems.push(newItem);
@@ -1261,7 +1203,7 @@ function addSelectedBankItems() {
     showToast(`${addedCount} ítems agregados con éxito`);
 }
 
-function closeBankModal() { document.getElementById('bankModal').style.display='none'; }
+function closeBankModal() { document.getElementById('bankModal').style.display = 'none'; }
 
 // --- BASE DE DATOS DE INSUMOS ---
 
@@ -1280,7 +1222,7 @@ function renderDBTables() {
             if (sortState.field === 'code') {
                 const numA = parseFloat(valA);
                 const numB = parseFloat(valB);
-                if(!isNaN(numA) && !isNaN(numB)) return (numA - numB) * sortState.dir;
+                if (!isNaN(numA) && !isNaN(numB)) return (numA - numB) * sortState.dir;
             }
             valA = valA ? valA.toString().toLowerCase() : "";
             valB = valB ? valB.toString().toLowerCase() : "";
@@ -1321,9 +1263,9 @@ function renderDBTables() {
             paginationDiv.style.display = 'none';
         }
         const table = document.getElementById(tableId);
-        table.querySelectorAll('.sort-icon').forEach(i => i.className = 'fas fa-sort sort-icon'); 
+        table.querySelectorAll('.sort-icon').forEach(i => i.className = 'fas fa-sort sort-icon');
         const activeHeader = table.querySelector(`.col-${sortState.field} .sort-icon`);
-        if(activeHeader) {
+        if (activeHeader) {
             activeHeader.className = sortState.dir === 1 ? 'fas fa-sort-down sort-icon' : 'fas fa-sort-up sort-icon';
         }
     });
@@ -1350,14 +1292,14 @@ function handleDescEnter(event, textarea) {
 function updateDbItem(type, id, field, value) {
     const item = appData.database[type].find(i => i.id === id);
     if (item) {
-        if(field === 'price') value = parseNumber(value);
+        if (field === 'price') value = parseNumber(value);
         item[field] = value;
         saveData();
     }
 }
 
 function deleteDbItem(type, id) {
-    if(confirm("¿Borrar este insumo de la base de datos?")) {
+    if (confirm("¿Borrar este insumo de la base de datos?")) {
         appData.database[type] = appData.database[type].filter(i => i.id !== id);
         saveData();
         renderDBTables();
@@ -1371,8 +1313,8 @@ function addDbRow(type) {
     renderDBTables();
     setTimeout(() => {
         const inputs = document.querySelectorAll(`#db-table-${type} textarea`);
-        for(let i=inputs.length-1; i>=0; i--) {
-            if(inputs[i].value === "" && inputs[i].classList.contains('db-desc-input')) {
+        for (let i = inputs.length - 1; i >= 0; i--) {
+            if (inputs[i].value === "" && inputs[i].classList.contains('db-desc-input')) {
                 inputs[i].focus();
                 break;
             }
@@ -1381,7 +1323,7 @@ function addDbRow(type) {
 }
 
 function cleanAndMergeDuplicates() {
-    if(!confirm("Esta acción buscará insumos con exactamente la misma Descripción y Unidad, y los fusionará manteniendo el PRECIO MÁS ALTO encontrado. ¿Continuar?")) return;
+    if (!confirm("Esta acción buscará insumos con exactamente la misma Descripción y Unidad, y los fusionará manteniendo el PRECIO MÁS ALTO encontrado. ¿Continuar?")) return;
     const types = ['materiales', 'mano_obra', 'equipos'];
     let totalRemoved = 0;
     types.forEach(type => {
@@ -1396,7 +1338,7 @@ function cleanAndMergeDuplicates() {
                 if (parseNumber(item.price) > parseNumber(existing.price)) existing.price = parseNumber(item.price);
                 duplicatesInType++;
             } else {
-                map.set(key, { ...item }); 
+                map.set(key, { ...item });
             }
         });
         if (duplicatesInType > 0) {
@@ -1482,7 +1424,7 @@ function importComplexAPUReport(input) {
     const file = input.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = async function (e) {
         try {
             const buffer = e.target.result;
             const workbook = new ExcelJS.Workbook();
@@ -1490,7 +1432,7 @@ function importComplexAPUReport(input) {
             const worksheet = workbook.getWorksheet(1);
             const jsonData = sheetToDataArray(worksheet);
             let importedCount = 0;
-            let stats = { new: 0, updated: 0 }; 
+            let stats = { new: 0, updated: 0 };
             let currentItem = null;
             let currentSection = null;
             let baseCode = getNextBankCode();
@@ -1498,18 +1440,18 @@ function importComplexAPUReport(input) {
                 const row = jsonData[i];
                 const rowStr = row.map(c => c ? c.toString().toUpperCase() : "").join(" ");
                 let itemFound = false;
-                for(let c=0; c<row.length; c++) {
-                    if(row[c] && row[c].toString().toUpperCase().includes("ITEM:")) {
+                for (let c = 0; c < row.length; c++) {
+                    if (row[c] && row[c].toString().toUpperCase().includes("ITEM:")) {
                         if (currentItem && currentItem.description) { appData.itemBank.push(currentItem); importedCount++; }
                         let parts = row[c].toString().split(":");
-                        let name = parts.slice(1).join(":"); 
-                        if(name.trim() === "" && row[c+1]) name = row[c+1];
+                        let name = parts.slice(1).join(":");
+                        if (name.trim() === "" && row[c + 1]) name = row[c + 1];
                         let unit = "glb";
-                        for(let u=c; u<row.length; u++) {
-                            if(row[u] && row[u].toString().toUpperCase().includes("UNIDAD:")) {
+                        for (let u = c; u < row.length; u++) {
+                            if (row[u] && row[u].toString().toUpperCase().includes("UNIDAD:")) {
                                 let uParts = row[u].toString().split(":");
                                 let unitVal = uParts.slice(1).join(":");
-                                if(unitVal.trim() === "" && row[u+1]) unitVal = row[u+1];
+                                if (unitVal.trim() === "" && row[u + 1]) unitVal = row[u + 1];
                                 unit = unitVal.trim();
                             }
                         }
@@ -1525,23 +1467,23 @@ function importComplexAPUReport(input) {
                         currentSection = null; itemFound = true; break;
                     }
                 }
-                if(itemFound) continue;
+                if (itemFound) continue;
                 if (!currentItem) continue;
                 if (rowStr.includes("MATERIALES") && !rowStr.includes("TOTAL")) { currentSection = 'MAT'; continue; }
                 if (rowStr.includes("MANO DE OBRA") && !rowStr.includes("TOTAL")) { currentSection = 'MO'; continue; }
                 if ((rowStr.includes("EQUIPO") || rowStr.includes("HERRAMIENTAS")) && !rowStr.includes("TOTAL")) { currentSection = 'EQ'; continue; }
                 if (rowStr.includes("TOTAL") || rowStr.includes("SUBTOTAL")) { currentSection = null; continue; }
                 if (currentSection) {
-                    let desc = row[2]; 
-                    let unit = row[3]; 
-                    let qty = parseNumber(row[4]); 
+                    let desc = row[2];
+                    let unit = row[3];
+                    let qty = parseNumber(row[4]);
                     let price = parseNumber(row[5]);
                     if (desc && desc.toString().trim() !== "" && !isNaN(price)) {
                         let res = { desc: desc.toString().trim(), unit: unit || "u", qty: qty || 0, price: price || 0 };
                         let dbType = '';
-                        if (currentSection === 'MAT') { currentItem.materiales.push(res); dbType = 'materiales';}
-                        else if (currentSection === 'MO') { currentItem.mano_obra.push(res); dbType = 'mano_obra';}
-                        else if (currentSection === 'EQ') { currentItem.equipos.push(res); dbType = 'equipos';}
+                        if (currentSection === 'MAT') { currentItem.materiales.push(res); dbType = 'materiales'; }
+                        else if (currentSection === 'MO') { currentItem.mano_obra.push(res); dbType = 'mano_obra'; }
+                        else if (currentSection === 'EQ') { currentItem.equipos.push(res); dbType = 'equipos'; }
                         if (dbType) {
                             const result = syncImportedResourceToDB(dbType, res);
                             if (result === 'new') stats.new++;
@@ -1554,10 +1496,10 @@ function importComplexAPUReport(input) {
             saveData();
             renderBankList();
             renderDBTables();
-            if(importedCount > 0) showToast(`Importados ${importedCount} APUs.`);
+            if (importedCount > 0) showToast(`Importados ${importedCount} APUs.`);
             else showToast('No se encontraron ítems');
             input.value = '';
-        } catch(e) {
+        } catch (e) {
             console.error(e);
             showToast("Error leyendo archivo");
         }
@@ -1600,7 +1542,7 @@ function importBudgetFromExcel(input) {
     const file = input.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async function(e) {
+    reader.onload = async function (e) {
         try {
             const buffer = e.target.result;
             const workbook = new ExcelJS.Workbook();
@@ -1611,7 +1553,7 @@ function importBudgetFromExcel(input) {
             let headerRowIndex = -1;
             let colDesc = -1, colUnit = -1, colQty = -1, colCode = -1;
             for (let i = 0; i < Math.min(jsonData.length, 20); i++) {
-                if(!Array.isArray(jsonData[i])) continue;
+                if (!Array.isArray(jsonData[i])) continue;
                 const row = jsonData[i].map(cell => cell ? cell.toString().toUpperCase().trim() : "");
                 if (row.includes("DESCRIPCIÓN") || row.includes("DESCRIPCION")) {
                     headerRowIndex = i;
@@ -1640,13 +1582,13 @@ function importBudgetFromExcel(input) {
                 let rawQty = 0;
                 if (colQty !== -1 && row[colQty] !== undefined && row[colQty] !== null) {
                     let val = row[colQty];
-                    if(typeof val === 'object' && val.result !== undefined) val = val.result;
+                    if (typeof val === 'object' && val.result !== undefined) val = val.result;
                     rawQty = parseNumber(val);
                 }
                 if (isNaN(rawQty)) rawQty = 0;
                 const match = findBestMatchInBank(descRaw, rawUnit);
                 let newItem = match ? JSON.parse(JSON.stringify(match)) : { materiales: [], mano_obra: [], equipos: [] };
-                if(match) itemsMatched++;
+                if (match) itemsMatched++;
                 newItem.id = Date.now() + Math.floor(Math.random() * 100000) + i;
                 newItem.moduleId = appData.activeModuleId;
                 newItem.projectCode = rawCode;
@@ -1706,7 +1648,7 @@ function findBestMatchInBank(targetDesc, targetUnit) {
 
 function collectInsumosFromProject(type) {
     insumosList = [];
-    const resourceKey = type; 
+    const resourceKey = type;
     const insumosMap = new Map();
     appData.projectItems.forEach(item => {
         if (item[resourceKey]) {
@@ -1756,7 +1698,7 @@ function renderInsumosTable() {
     const tbody = document.getElementById('insumosTableBody');
     tbody.innerHTML = '';
     if (insumosList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:20px; color:#718096;"><i class="fas fa-info-circle"></i> No se encontraron insumos de este tipo en el presupuesto.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:20px; color:var(--text-muted);"><i class="fas fa-info-circle"></i> No se encontraron insumos de este tipo en el presupuesto.</td></tr>';
         return;
     }
     insumosList.sort((a, b) => a.desc.localeCompare(b.desc));
@@ -1897,7 +1839,7 @@ async function exportInsumosToExcel() {
     totalRow.getCell(5).numFmt = '#,##0.00 "Bs"';
     totalRow.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBEE3F8' } };
     const buffer = await workbook.xlsx.writeBuffer();
-    saveExcelBuffer(buffer, `Insumos_${tipoTexto[currentInsumosType]}_${new Date().toISOString().slice(0,10)}.xlsx`);
+    saveExcelBuffer(buffer, `Insumos_${tipoTexto[currentInsumosType]}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     showToast('Excel exportado correctamente');
 }
 
@@ -1929,7 +1871,7 @@ function loadSettingsToUI() {
     document.getElementById('conf-gg').value = appData.settings.gg;
     document.getElementById('conf-util').value = appData.settings.util;
     document.getElementById('conf-it').value = appData.settings.it;
-    if(appData.settings.numberFormat) document.getElementById('conf-format').value = appData.settings.numberFormat;
+    if (appData.settings.numberFormat) document.getElementById('conf-format').value = appData.settings.numberFormat;
     updatePrecisionIndicator();
 }
 
@@ -1953,9 +1895,9 @@ function saveSettings() {
     renderDBTables();
     renderInsumosTable();
     recalcCalcTable();
-    if(currentEditId) {
+    if (currentEditId) {
         let item = (editorContext === 'project') ? appData.projectItems.find(i => i.id === currentEditId) : appData.itemBank.find(i => i.id === currentEditId);
-        if(item) renderAPUTables(item);
+        if (item) renderAPUTables(item);
     }
     showToast('Formato numérico actualizado en todas las pestañas');
 }
@@ -2016,7 +1958,7 @@ async function exportB1ToExcel() {
         ws.mergeCells('B1:D1');
         ws.getCell('B1').font = { bold: true, size: 12 };
         const hRow = ws.addRow(["Nº", "DESCRIPCIÓN", "UNIDAD", "PRECIO UNITARIO"]);
-        for(let i=1; i<=4; i++) hRow.getCell(i).style = styleHeader;
+        for (let i = 1; i <= 4; i++) hRow.getCell(i).style = styleHeader;
         ws.getColumn(1).width = 5; ws.getColumn(2).width = 50; ws.getColumn(3).width = 15; ws.getColumn(4).width = 20;
         const data = getProjectInsumos(spec.type);
         const dataOrdenada = [...data].sort((a, b) => a.desc.localeCompare(b.desc, 'es', { sensitivity: 'base' }));
@@ -2026,7 +1968,7 @@ async function exportB1ToExcel() {
             row.getCell(4).numFmt = '0.00000';
         });
         const starRow = ws.addRow(["*", "", "", ""]);
-        for(let i=1; i<=4; i++) starRow.getCell(i).border = borderStyle;
+        for (let i = 1; i <= 4; i++) starRow.getCell(i).border = borderStyle;
         const buffer = await wb.xlsx.writeBuffer();
         zip.file(spec.name, buffer);
     }
@@ -2040,12 +1982,12 @@ async function exportB1ToExcel() {
         const ws = wbForm.addWorksheet(f.sheet);
         ws.addRow(["", f.title]);
         const hRow = ws.addRow(["Código", "Descripción", "Unidad", "Cantidad", "Precio Unitario", "Precio Total (Bs)"]);
-        for(let i=1; i<=6; i++) hRow.getCell(i).style = styleHeader;
+        for (let i = 1; i <= 6; i++) hRow.getCell(i).style = styleHeader;
         ws.getColumn(1).width = 10; ws.getColumn(2).width = 45; ws.getColumn(3).width = 10; ws.getColumn(4).width = 15; ws.getColumn(5).width = 15; ws.getColumn(6).width = 18;
         appData.projectItems.forEach(item => {
             const code = item.projectCode ? `>${item.projectCode}` : `>${item.code || ''}`;
             const itemRow = ws.addRow([code, item.description, "", "", "", ""]);
-            for(let c=1; c<=6; c++) { const cell = itemRow.getCell(c); cell.fill = styleItemFill; cell.font = { bold: true }; cell.border = borderStyle; }
+            for (let c = 1; c <= 6; c++) { const cell = itemRow.getCell(c); cell.fill = styleItemFill; cell.font = { bold: true }; cell.border = borderStyle; }
             const itemQty = n(item.quantity);
             (item[f.key] || []).forEach((r, idx) => {
                 const totalQty = n(r.qty * itemQty);
@@ -2059,117 +2001,27 @@ async function exportB1ToExcel() {
             });
         });
         const starRow = ws.addRow(["*", "", "", "", "", ""]);
-        for(let c=1; c<=6; c++) starRow.getCell(c).border = borderStyle;
+        for (let c = 1; c <= 6; c++) starRow.getCell(c).border = borderStyle;
     });
     const bufferForm = await wbForm.xlsx.writeBuffer();
     zip.file("FORM_CANTIDADES.xlsx", bufferForm);
     showToast("Comprimiendo ZIP...");
-    zip.generateAsync({type:"blob"}).then(function(content) {
-        const dateStr = new Date().toISOString().slice(0,10);
+    zip.generateAsync({ type: "blob" }).then(function (content) {
+        const dateStr = new Date().toISOString().slice(0, 10);
         saveAs(content, `Reportes_SICOES_5DEC_${pName}_${dateStr}.zip`);
         showToast("Descarga lista");
     });
 }
 
-// --- EXPORTAR PROYECTO (.presu) ---
-async function exportProjectJSON() {
-    const useEncryption = confirm("¿Deseas proteger este archivo con contraseña?\n\n- Aceptar: Guardar ENCRIPTADO (.presu)\n- Cancelar: Guardar SIMPLE (.json)");
+// --- EXPORTACIÓN JSON ---
 
-    let finalContent = "";
-    let fileName = "";
-    let fileExt = "";
-    
-    const ahora = new Date(); 
-    const dia = String(ahora.getDate()).padStart(2, '0'); 
-    const mes = String(ahora.getMonth() + 1).padStart(2, '0'); 
-    const año = ahora.getFullYear();
-    const pName = (appData.modules[0] ? appData.modules[0].name.substring(0, 10) : "Proyecto").replace(/[^a-z0-9]/gi, '_');
-
-    if (useEncryption) {
-        const password = prompt("🔐 Crea una contraseña para este archivo .presu:\n(Si la olvidas, perderás los datos)");
-        if (!password) { showToast("Cancelado por el usuario."); return; }
-        
-        showToast("Encriptando...");
-        try {
-            finalContent = await encryptData(appData, password);
-            fileExt = ".presu";
-            fileName = `RESG_${pName}_${dia}${mes}${año}${fileExt}`;
-        } catch (e) {
-            alert("Error: No se pudo encriptar. Verifica que estés usando HTTPS o localhost.");
-            return;
-        }
-    } else {
-        finalContent = JSON.stringify(appData);
-        fileExt = ".json";
-        fileName = `Proy_${pName}_${dia}${mes}${año}${fileExt}`;
-    }
-
-    const blob = new Blob([finalContent], { type: "application/octet-stream" });
-    saveAs(blob, fileName);
-    
-    showToast(`Guardado: ${fileName}`);
-    const modal = document.getElementById('saveOptionsModal');
-    if(modal) modal.style.display = 'none';
-}
-
-// --- IMPORTAR PROYECTO (.presu / .json) ---
-function loadProjectJSON(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = async function(e) { 
-        try { 
-            const rawContent = e.target.result;
-            let loadedData = null;
-            
-            // Verificación preliminar
-            let isEncrypted = false;
-            try {
-                const check = JSON.parse(rawContent);
-                if (check._secure) isEncrypted = true;
-                else loadedData = check;
-            } catch (err) {
-                alert("El archivo está dañado o no es un formato válido.");
-                return;
-            }
-
-            if (isEncrypted) {
-                const password = prompt("🔒 Archivo Protegido (.presu)\nIngrese la contraseña:");
-                if (!password) { input.value = ''; return; }
-
-                showToast("Desencriptando...");
-                try {
-                    loadedData = await decryptData(rawContent, password);
-                } catch (cryptoError) {
-                    alert("⛔ Contraseña incorrecta.");
-                    input.value = '';
-                    return;
-                }
-            }
-
-            // Cargar datos en la App
-            if (loadedData) {
-                appData = { ...appData, ...loadedData };
-                
-                // Reparar estructuras si faltan
-                if (!appData.activeModuleId && appData.modules.length > 0) appData.activeModuleId = appData.modules[0].id;
-                if (!appData.database) appData.database = { materiales: [], mano_obra: [], equipos: [] };
-                
-                saveData();
-                renderB1(); renderBankList(); renderDBTables(); loadSettingsToUI();
-                if(editorContext) closeEditor();
-                switchTab('b1');
-                showToast("✅ Proyecto cargado correctamente"); 
-            }
-
-        } catch(err) { 
-            console.error(err); 
-            showToast("Error crítico al procesar el archivo."); 
-        }
-        input.value = '';
-    };
-    reader.readAsText(file);
+function exportProjectJSON() {
+    const s = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+    const dl = document.createElement('a'); dl.href = s;
+    const ahora = new Date(); const dia = String(ahora.getDate()).padStart(2, '0'); const mes = String(ahora.getMonth() + 1).padStart(2, '0'); const año = ahora.getFullYear();
+    dl.download = `Proy_Save_${dia}${mes}${año}.json`;
+    dl.click();
+    showToast('Proyecto guardado');
 }
 
 function openSaveOptionsModal() {
@@ -2186,139 +2038,98 @@ function exportBudgetOnlyJSON() {
     showToast('Presupuesto exportado (sin BD)');
 }
 
-// --- EXPORTAR BANCO (.presudb) ---
-async function exportBankJSON() {
-    // Preguntar seguridad
-    const useEncryption = confirm("¿Encriptar Banco de Ítems?\n\n- Aceptar: Archivo Seguro (.presudb)\n- Cancelar: Archivo Plano (.json)");
-    
-    let finalContent = "";
-    let fileName = "";
-    const ahora = new Date(); 
-    const dia = String(ahora.getDate()).padStart(2, '0'); 
-    const mes = String(ahora.getMonth() + 1).padStart(2, '0'); 
-    const año = ahora.getFullYear();
-
-    if (useEncryption) {
-        const password = prompt("🔐 Crea una contraseña para el Banco:");
-        if (!password) return;
-
-        try {
-            // Encriptamos SOLO el array del banco
-            finalContent = await encryptData(appData.itemBank, password);
-            fileName = `Banco_Items_${dia}${mes}${año}.presudb`;
-        } catch (e) {
-            alert("Error de encriptación (Revisa HTTPS).");
-            return;
-        }
-    } else {
-        finalContent = JSON.stringify(appData.itemBank);
-        fileName = `Banco_Items_${dia}${mes}${año}.json`;
-    }
-
-    const blob = new Blob([finalContent], { type: "application/octet-stream" });
-    saveAs(blob, fileName);
-    showToast("Banco exportado.");
-}
-
-// --- IMPORTAR BANCO (.presudb / .json) ---
-function importBankJSON(input) {
+function loadProjectJSON(input) {
     const file = input.files[0];
     if (!file) return;
-
+    const fileName = file.name.toLowerCase();
+    const isValidExtension = fileName.endsWith('.json');
+    const isValidMimeType = file.type === 'application/json' || file.type === 'text/json' || file.type === 'text/plain' || file.type === '';
+    if (!isValidExtension && !isValidMimeType) { showToast('Por favor, seleccione un archivo JSON válido.'); input.value = ''; return; }
     const reader = new FileReader();
-    reader.onload = async function(e) {
-        try { 
-            const rawContent = e.target.result;
-            let loadedBank = null;
-            let isEncrypted = false;
-
-            // Detectar si está encriptado
-            try {
-                const check = JSON.parse(rawContent);
-                if (check._secure) isEncrypted = true;
-                else loadedBank = check;
-            } catch (err) {
-                showToast("Archivo inválido"); return;
-            }
-
-            if (isEncrypted) {
-                const password = prompt("🔒 Importando Banco Protegido (.presudb)\nContraseña:");
-                if (!password) { input.value = ''; return; }
-
-                try {
-                    loadedBank = await decryptData(rawContent, password);
-                } catch (err) {
-                    alert("⛔ Contraseña incorrecta.");
-                    input.value = '';
-                    return;
-                }
-            }
-
-            // Procesar el array importado
-            if(Array.isArray(loadedBank)) {
-                let apuCount = 0; 
-                let insumosCount = 0;
-                
-                loadedBank.forEach((i, index) => { 
-                    // Generar nuevos IDs para evitar colisiones
-                    i.id = Date.now() + Math.floor(Math.random() * 10000) + index; 
-                    // Si el código ya existe, calculamos uno nuevo
-                    i.code = getNextBankCode(); 
-                    
-                    appData.itemBank.push(i); 
-                    apuCount++;
-
-                    // Sincronizar insumos nuevos a la BD
-                    if (i.materiales) i.materiales.forEach(res => { if(syncImportedResourceToDB('materiales', res) === 'new') insumosCount++; });
-                    if (i.mano_obra) i.mano_obra.forEach(res => { if(syncImportedResourceToDB('mano_obra', res) === 'new') insumosCount++; });
-                    if (i.equipos) i.equipos.forEach(res => { if(syncImportedResourceToDB('equipos', res) === 'new') insumosCount++; });
-                });
-
-                saveData();
-                renderBankList(); 
-                renderDBTables();
-                showToast(`Importado: ${apuCount} APUs y ${insumosCount} insumos.`);
-            } else {
-                alert("El archivo desencriptado no contiene una lista de ítems válida.");
-            }
-        } catch(e) { 
-            console.error(e); 
-            showToast("Error al importar banco."); 
+    reader.onload = function (e) {
+        try {
+            const loadedData = JSON.parse(e.target.result);
+            appData = { ...appData, ...loadedData };
+            if (!appData.activeModuleId && appData.modules.length > 0) appData.activeModuleId = appData.modules[0].id;
+            if (!appData.database) appData.database = { materiales: [], mano_obra: [], equipos: [] };
+            saveData();
+            renderB1(); renderBankList(); renderDBTables(); loadSettingsToUI();
+            switchTab('b1');
+            showToast("Proyecto cargado correctamente");
+        } catch (err) {
+            console.error(err); showToast("Error al leer el archivo JSON. Verifique que el archivo sea válido.");
         }
         input.value = '';
     };
     reader.readAsText(file);
 }
 
+function exportBankJSON() {
+    const s = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData.itemBank));
+    const dl = document.createElement('a'); dl.href = s;
+    const ahora = new Date(); const dia = String(ahora.getDate()).padStart(2, '0'); const mes = String(ahora.getMonth() + 1).padStart(2, '0'); const año = ahora.getFullYear();
+    dl.download = `BD_${dia}${mes}${año}.json`;
+    dl.click();
+    showToast('Banco exportado');
+}
+
+function importBankJSON(input) {
+    const r = new FileReader();
+    r.onload = function (e) {
+        try {
+            let loaded = JSON.parse(e.target.result);
+            if (Array.isArray(loaded)) {
+                let apuCount = 0; let insumosCount = 0;
+                loaded.forEach((i, index) => {
+                    i.code = getNextBankCode();
+                    i.id = Date.now() + Math.floor(Math.random() * 1000) + index;
+                    appData.itemBank.push(i);
+                    apuCount++;
+                    if (i.materiales && Array.isArray(i.materiales)) i.materiales.forEach(res => { const result = syncImportedResourceToDB('materiales', res); if (result === 'new') insumosCount++; });
+                    if (i.mano_obra && Array.isArray(i.mano_obra)) i.mano_obra.forEach(res => { const result = syncImportedResourceToDB('mano_obra', res); if (result === 'new') insumosCount++; });
+                    if (i.equipos && Array.isArray(i.equipos)) i.equipos.forEach(res => { const result = syncImportedResourceToDB('equipos', res); if (result === 'new') insumosCount++; });
+                });
+                saveData();
+                renderBankList(); renderDBTables();
+                showToast(`Importado: ${apuCount} APUs y ${insumosCount} insumos nuevos`);
+            }
+        } catch (e) {
+            console.error(e); showToast("Error al leer el archivo JSON o formato incorrecto");
+        }
+        input.value = '';
+    };
+    r.readAsText(input.files[0]);
+}
+
 function importDBFromExcel() {
     const f = document.getElementById('dbFile').files[0];
     const type = document.getElementById('dbImportType').value;
-    if(!f) { showToast('Seleccione un archivo primero'); return; }
+    if (!f) { showToast('Seleccione un archivo primero'); return; }
     const r = new FileReader();
-    r.onload = async function(e) {
+    r.onload = async function (e) {
         try {
             const buffer = e.target.result;
             const workbook = new ExcelJS.Workbook();
             await workbook.xlsx.load(buffer);
             const worksheet = workbook.getWorksheet(1);
             const json = sheetToDataArray(worksheet);
-            let c=0;
-            for(let i=1; i<json.length; i++) {
+            let c = 0;
+            for (let i = 1; i < json.length; i++) {
                 let row = json[i];
-                if(row && row.length>=2 && row[1]) {
+                if (row && row.length >= 2 && row[1]) {
                     const desc = row[1] ? row[1].toString().trim() : "";
                     const unit = row[2] ? row[2].toString().trim() : "u";
                     let price = parseFloat(row[3]);
-                    if(isNaN(price)) price = parseFloat(row[4]);
-                    if(isNaN(price)) price = 0;
+                    if (isNaN(price)) price = parseFloat(row[4]);
+                    if (isNaN(price)) price = 0;
                     appData.database[type].push({ id: Date.now() + Math.floor(Math.random() * 100000) + c, code: "0", desc, unit, price });
                     c++;
                 }
             }
-            if(c > 0) { saveData(); renderDBTables(); showToast(`Importados ${c} insumos`); }
+            if (c > 0) { saveData(); renderDBTables(); showToast(`Importados ${c} insumos`); }
             else showToast('No se encontraron datos válidos');
             document.getElementById('dbFile').value = '';
-        } catch(err) { console.error(err); showToast('Error al procesar el archivo'); }
+        } catch (err) { console.error(err); showToast('Error al procesar el archivo'); }
     };
     r.readAsArrayBuffer(f);
 }
@@ -2329,7 +2140,7 @@ function openDeleteModal() { document.getElementById('deleteOptionsModal').style
 function closeDeleteModal() { document.getElementById('deleteOptionsModal').style.display = 'none'; }
 
 function clearBudgetOnly() {
-    if(confirm("¿Estás seguro de vaciar SOLAMENTE los ítems del presupuesto actual?\n\nTu Banco de Ítems y Base de Insumos NO se borrarán.")) {
+    if (confirm("¿Estás seguro de vaciar SOLAMENTE los ítems del presupuesto actual?\n\nTu Banco de Ítems y Base de Insumos NO se borrarán.")) {
         appData.projectItems = [];
         const defaultId = 'mod_' + Date.now();
         appData.modules = [{ id: defaultId, name: "General" }];
@@ -2351,6 +2162,7 @@ async function resetData() {
     if (!confirm("⚠️ ATENCIÓN ⚠️\nEsta acción realizará un BORRADO DE FÁBRICA:\n\n1. Eliminará todos los proyectos y bancos de ítems.\n2. Borrará la configuración personal.\n3. Limpiará la Memoria Caché y Cookies de la aplicación.\n\n¿Estás absolutamente seguro de continuar?")) return;
     showToast("Iniciando limpieza profunda...");
     try { localStorage.clear(); sessionStorage.clear(); } catch (e) { console.error("Error limpiando Storage", e); }
+    try { await localforage.clear(); localStorage.clear(); sessionStorage.clear(); } catch (e) { console.error("Error limpiando Storage", e); }
     try { document.cookie.split(";").forEach((c) => { document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); }); } catch (e) { console.error("Error limpiando Cookies", e); }
     if ('caches' in window) { try { const keys = await caches.keys(); await Promise.all(keys.map(key => caches.delete(key))); } catch (e) { console.error("Error limpiando Cache Storage", e); } }
     if ('serviceWorker' in navigator) { try { const registrations = await navigator.serviceWorker.getRegistrations(); for (const registration of registrations) await registration.unregister(); } catch (e) { console.error("Error desregistrando SW", e); } }
@@ -2367,14 +2179,14 @@ function searchCalcItem() {
     if (txt.length < 2) { resultsDiv.style.display = 'none'; return; }
     resultsDiv.innerHTML = '';
     const matches = appData.itemBank.filter(i => i.description.toLowerCase().includes(txt) || i.code.toString().includes(txt));
-    if (matches.length === 0) resultsDiv.innerHTML = '<div style="padding:10px; color:#718096;">No hay coincidencias en el Banco.</div>';
+    if (matches.length === 0) resultsDiv.innerHTML = '<div style="padding:10px; color:var(--text-muted);">No hay coincidencias en el Banco.</div>';
     else {
         matches.forEach(item => {
             const div = document.createElement('div');
             div.style.cssText = 'padding:8px 10px; cursor:pointer; border-bottom:1px solid #f7fafc; hover:background:#f7fafc;';
             div.innerHTML = `<strong>${item.code}</strong> - ${item.description} <small>(${item.unit})</small>`;
             div.className = 'search-result-item'; // Agregaremos este CSS abajo
-            div.onclick = function() { selectItemForCalc(item); resultsDiv.style.display = 'none'; document.getElementById('calc-search-input').value = ''; };
+            div.onclick = function () { selectItemForCalc(item); resultsDiv.style.display = 'none'; document.getElementById('calc-search-input').value = ''; };
             resultsDiv.appendChild(div);
         });
     }
@@ -2383,14 +2195,14 @@ function searchCalcItem() {
 
 function selectItemForCalc(item) {
     currentCalcItemData = JSON.parse(JSON.stringify(item));
-    
+
     // Forzamos la actualización visual
     const nameEl = document.getElementById('calc-selected-name');
     const unitEl = document.getElementById('calc-selected-unit');
-    
-    if(nameEl) nameEl.textContent = item.description;
-    if(unitEl) unitEl.textContent = item.unit;
-    
+
+    if (nameEl) nameEl.textContent = item.description;
+    if (unitEl) unitEl.textContent = item.unit;
+
     // Opcional: Poner también el nombre en el buscador para que el usuario sepa qué buscó
     document.getElementById('calc-search-input').value = item.description;
 
@@ -2417,14 +2229,14 @@ function recalcCalcTable() {
         if (res.calcFactor && parseFloat(res.calcFactor) !== 0) {
             finalValue = totalBase / res.calcFactor;
             if (parseFloat(res.calcFactor) !== 1) {
-                if (type === 'materiales') { 
-                    if (descLower.includes('cemento') || descLower.includes('yeso')) { 
-                        labelSuffix = " Bolsas"; 
+                if (type === 'materiales') {
+                    if (descLower.includes('cemento') || descLower.includes('yeso')) {
+                        labelSuffix = " Bolsas";
                         textClass = "text-calc-special"; // Púrpura
-                    } 
+                    }
                 }
-                else if (type === 'mano_obra' || type === 'equipos') { 
-                    labelSuffix = " Días"; 
+                else if (type === 'mano_obra' || type === 'equipos') {
+                    labelSuffix = " Días";
                     textClass = "text-calc-work"; // Naranja/Amarillo
                 }
             }
@@ -2436,11 +2248,10 @@ function recalcCalcTable() {
 
     };
     let html = '';
-    const sections = [{id:'materiales', l:'Materiales', i:'fa-box'}, {id:'mano_obra', l:'Mano de Obra', i:'fa-users'}, {id:'equipos', l:'Equipos', i:'fa-truck-monster'}];
+    const sections = [{ id: 'materiales', l: 'Materiales', i: 'fa-box' }, { id: 'mano_obra', l: 'Mano de Obra', i: 'fa-users' }, { id: 'equipos', l: 'Equipos', i: 'fa-truck-monster' }];
     sections.forEach(sec => {
 
         if (currentCalcItemData[sec.id] && currentCalcItemData[sec.id].length > 0) {
-            // CORRECCIÓN 4: Usar clase CSS en lugar de style background hardcoded
             html += `<tr class="calc-category-row">
                 <td colspan="5" class="calc-category-cell">
                     <i class="fas ${sec.i}"></i> ${sec.l}
@@ -2469,7 +2280,7 @@ function printCalcReport() {
         if (row.style.background.includes('rgb(237, 242, 247)')) tableRows += `<tr><td colspan="4" style="background:#f1f5f9; font-weight:bold; padding:10px; border:1px solid #e2e8f0;">${row.innerText.toUpperCase()}</td></tr>`;
         else {
             const cells = row.querySelectorAll('td');
-            if(cells.length >= 5) {
+            if (cells.length >= 5) {
                 const desc = cells[0].innerText;
                 const unit = cells[1].innerText;
                 const yieldVal = cells[2].querySelector('input').value;
@@ -2485,7 +2296,7 @@ function printCalcReport() {
     setTimeout(() => { printWindow.print(); }, 250);
 }
 
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function (e) {
     const searchContainer = document.getElementById('calc-search-input').parentElement.parentElement;
     const results = document.getElementById('calc-search-results');
     if (!searchContainer.contains(e.target) && results) results.style.display = 'none';
@@ -2495,18 +2306,17 @@ document.addEventListener('click', function(e) {
 
 let currentReportFormat = 'pdf';
 
-function openReportModal() { 
+function openReportModal() {
     const input = document.getElementById('reportProjectName');
-    
+
     // Valor por defecto si está vacío
-    if(input && !input.value) input.value = "CONSTRUCCIÓN...";
-    
-    document.getElementById('reportModal').style.display = 'block'; 
+    if (input && !input.value) input.value = "CONSTRUCCIÓN...";
+
+    document.getElementById('reportModal').style.display = 'block';
 
     // Lógica de Foco: Pequeño retraso para asegurar que el modal sea visible
     setTimeout(() => {
-        if(input) {
-            input.focus();  // Pone el cursor
+        if (input) {
             input.select(); // Selecciona todo el texto para facilitar el reemplazo rápido
         }
     }, 100);
@@ -2535,7 +2345,7 @@ function generatePDFReportSICOES(type, projectName) {
     const doc = new jsPDF();
     const dateStr = new Date().toLocaleDateString();
     const f = (num, t) => formatNumber(num, t);
-    const s = appData.settings; 
+    const s = appData.settings;
     const tableStyles = { cellPadding: 1.5, minCellHeight: 6, fontSize: 8, valign: 'middle' };
     const headerStyles = { fillColor: [230, 230, 230], textColor: 0, fontStyle: 'bold', lineWidth: 0.1, lineColor: 150, halign: 'center' };
     const addPagePG = () => {
@@ -2561,7 +2371,7 @@ function generatePDFReportSICOES(type, projectName) {
             });
         });
         tableBody.push([{ content: "TOTAL PRESUPUESTO", colSpan: 5, styles: { fontStyle: 'bold', halign: 'right' } }, { content: f(grandTotal, 'total'), styles: { fontStyle: 'bold' } }]);
-        doc.autoTable({ startY: 35, head: [['Nº', 'DESCRIPCIÓN', 'UND.', 'CANTIDAD', 'P. UNITARIO', 'TOTAL']], body: tableBody, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: { 0: { halign: 'left', cellWidth: 10 }, 2: { halign: 'center'}, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } } });
+        doc.autoTable({ startY: 35, head: [['Nº', 'DESCRIPCIÓN', 'UND.', 'CANTIDAD', 'P. UNITARIO', 'TOTAL']], body: tableBody, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: { 0: { halign: 'left', cellWidth: 10 }, 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } } });
     };
     const addPageAPUs = () => {
         const apuColumnStyles = { 0: { cellWidth: 95 }, 1: { cellWidth: 15, halign: 'center' }, 2: { cellWidth: 22, halign: 'right' }, 3: { cellWidth: 25, halign: 'right' }, 4: { cellWidth: 25, halign: 'right' } };
@@ -2584,39 +2394,39 @@ function generatePDFReportSICOES(type, projectName) {
                 const matArr = item.materiales || [];
                 const moArr = item.mano_obra || [];
                 const eqArr = item.equipos || [];
-                const sumMat = matArr.reduce((a,b)=>a+(b.qty*b.price),0);
-                const sumMo = moArr.reduce((a,b)=>a+(b.qty*b.price),0);
-                const valSoc = sumMo * (s.social/100);
-                const valIvaMo = (sumMo + valSoc) * (s.iva_mo/100);
+                const sumMat = matArr.reduce((a, b) => a + (b.qty * b.price), 0);
+                const sumMo = moArr.reduce((a, b) => a + (b.qty * b.price), 0);
+                const valSoc = sumMo * (s.social / 100);
+                const valIvaMo = (sumMo + valSoc) * (s.iva_mo / 100);
                 const totalMo = sumMo + valSoc + valIvaMo;
-                const sumEq = eqArr.reduce((a,b)=>a+(b.qty*b.price),0);
-                const valTools = totalMo * (s.tools/100);
+                const sumEq = eqArr.reduce((a, b) => a + (b.qty * b.price), 0);
+                const valTools = totalMo * (s.tools / 100);
                 const totalEq = sumEq + valTools;
                 const costoDirecto = sumMat + totalMo + totalEq;
-                const valGG = costoDirecto * (s.gg/100);
-                const valUtil = (costoDirecto + valGG) * (s.util/100);
-                const valIT = (costoDirecto + valGG + valUtil) * (s.it/100);
+                const valGG = costoDirecto * (s.gg / 100);
+                const valUtil = (costoDirecto + valGG) * (s.util / 100);
+                const valIT = (costoDirecto + valGG + valUtil) * (s.it / 100);
                 const precioFinal = costoDirecto + valGG + valUtil + valIT;
-                const bodyMat = matArr.map(r => [r.desc, r.unit, f(r.qty, 'yield'), f(r.price, 'price'), f(r.qty*r.price, 'partial')]);
+                const bodyMat = matArr.map(r => [r.desc, r.unit, f(r.qty, 'yield'), f(r.price, 'price'), f(r.qty * r.price, 'partial')]);
                 bodyMat.push([{ content: 'SUBTOTAL MATERIALES', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, f(sumMat, 'partial')]);
-                doc.autoTable({ startY: y, head: [['MATERIALES', 'UND.', 'REND.', 'PRECIO', 'PARCIAL']], body: bodyMat, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: apuColumnStyles, margin:{left:14, right:14} });
+                doc.autoTable({ startY: y, head: [['MATERIALES', 'UND.', 'REND.', 'PRECIO', 'PARCIAL']], body: bodyMat, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: apuColumnStyles, margin: { left: 14, right: 14 } });
                 y = doc.lastAutoTable.finalY + 4;
-                const bodyMo = moArr.map(r => [r.desc, r.unit, f(r.qty, 'yield'), f(r.price, 'price'), f(r.qty*r.price, 'partial')]);
+                const bodyMo = moArr.map(r => [r.desc, r.unit, f(r.qty, 'yield'), f(r.price, 'price'), f(r.qty * r.price, 'partial')]);
                 bodyMo.push([{ content: 'SUBTOTAL MANO DE OBRA', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, f(sumMo, 'partial')]);
                 bodyMo.push([{ content: `Cargas Sociales (${s.social}%)`, colSpan: 4, styles: { halign: 'right', textColor: 100 } }, f(valSoc, 'partial')]);
                 bodyMo.push([{ content: `IVA MO (${s.iva_mo}%)`, colSpan: 4, styles: { halign: 'right', textColor: 100 } }, f(valIvaMo, 'partial')]);
-                bodyMo.push([{ content: 'TOTAL MANO DE OBRA', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor:[245,245,245] } }, { content: f(totalMo, 'partial'), styles:{fontStyle:'bold'} }]);
-                doc.autoTable({ startY: y, head: [['MANO DE OBRA', 'UND.', 'REND.', 'PRECIO', 'PARCIAL']], body: bodyMo, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: apuColumnStyles, margin:{left:14, right:14} });
+                bodyMo.push([{ content: 'TOTAL MANO DE OBRA', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245] } }, { content: f(totalMo, 'partial'), styles: { fontStyle: 'bold' } }]);
+                doc.autoTable({ startY: y, head: [['MANO DE OBRA', 'UND.', 'REND.', 'PRECIO', 'PARCIAL']], body: bodyMo, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: apuColumnStyles, margin: { left: 14, right: 14 } });
                 y = doc.lastAutoTable.finalY + 4;
-                const bodyEq = eqArr.map(r => [r.desc, r.unit, f(r.qty, 'yield'), f(r.price, 'price'), f(r.qty*r.price, 'partial')]);
+                const bodyEq = eqArr.map(r => [r.desc, r.unit, f(r.qty, 'yield'), f(r.price, 'price'), f(r.qty * r.price, 'partial')]);
                 bodyEq.push([{ content: 'SUBTOTAL EQUIPO', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, f(sumEq, 'partial')]);
                 bodyEq.push([{ content: `Herramientas Menores (${s.tools}% de MO)`, colSpan: 4, styles: { halign: 'right', textColor: 100 } }, f(valTools, 'partial')]);
-                bodyEq.push([{ content: 'TOTAL EQUIPO Y MAQUINARIA', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor:[245,245,245] } }, { content: f(totalEq, 'partial'), styles:{fontStyle:'bold'} }]);
+                bodyEq.push([{ content: 'TOTAL EQUIPO Y MAQUINARIA', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 245, 245] } }, { content: f(totalEq, 'partial'), styles: { fontStyle: 'bold' } }]);
                 if (y > 220) { doc.addPage(); y = 20; }
-                doc.autoTable({ startY: y, head: [['EQUIPO Y MAQUINARIA', 'UND.', 'REND.', 'PRECIO', 'PARCIAL']], body: bodyEq, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: apuColumnStyles, margin:{left:14, right:14} });
+                doc.autoTable({ startY: y, head: [['EQUIPO Y MAQUINARIA', 'UND.', 'REND.', 'PRECIO', 'PARCIAL']], body: bodyEq, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: apuColumnStyles, margin: { left: 14, right: 14 } });
                 y = doc.lastAutoTable.finalY + 4;
                 if (y > 230) { doc.addPage(); y = 20; }
-                doc.autoTable({ startY: y, body: [['COSTO DIRECTO', f(costoDirecto, 'total')], [`Gastos Generales (${s.gg}%)`, f(valGG, 'total')], [`Utilidad (${s.util}%)`, f(valUtil, 'total')], [`Impuesto IT (${s.it}%)`, f(valIT, 'total')], ['PRECIO UNITARIO TOTAL', f(precioFinal, 'total')]], theme: 'plain', styles: { ...tableStyles, cellPadding: 1 }, columnStyles: { 0: { halign: 'right', fontStyle: 'bold', cellWidth: 157 }, 1: { halign: 'right', fontStyle: 'bold', cellWidth: 25, fillColor:[240,240,240] } }, margin: { left: 14, right: 14 } });
+                doc.autoTable({ startY: y, body: [['COSTO DIRECTO', f(costoDirecto, 'total')], [`Gastos Generales (${s.gg}%)`, f(valGG, 'total')], [`Utilidad (${s.util}%)`, f(valUtil, 'total')], [`Impuesto IT (${s.it}%)`, f(valIT, 'total')], ['PRECIO UNITARIO TOTAL', f(precioFinal, 'total')]], theme: 'plain', styles: { ...tableStyles, cellPadding: 1 }, columnStyles: { 0: { halign: 'right', fontStyle: 'bold', cellWidth: 157 }, 1: { halign: 'right', fontStyle: 'bold', cellWidth: 25, fillColor: [240, 240, 240] } }, margin: { left: 14, right: 14 } });
             });
         });
     };
@@ -2624,14 +2434,14 @@ function generatePDFReportSICOES(type, projectName) {
         collectInsumosFromProjectGlobal(cat);
         doc.addPage();
         doc.setFontSize(14); doc.setFont("helvetica", "bold");
-        doc.text(`LISTADO DE ${cat.toUpperCase()}`, 105, 20, {align:'center'});
+        doc.text(`LISTADO DE ${cat.toUpperCase()}`, 105, 20, { align: 'center' });
         doc.setFontSize(10); doc.setFont("helvetica", "normal");
         doc.text(`PROYECTO: ${projectName}`, 105, 26, { align: "center" });
         doc.text(`FECHA: ${dateStr}`, 195, 26, { align: "right" });
         const body = insumosGlobalList.map(i => [i.desc, i.unit, f(i.cantidadTotal, 'qty'), f(i.precioUnitario, 'price'), f(i.precioTotal, 'total')]);
-        const total = insumosGlobalList.reduce((a,b)=>a+b.precioTotal,0);
-        body.push([{ content: 'TOTAL', colSpan: 4, styles:{halign:'right', fontStyle:'bold'} }, { content: f(total, 'total'), styles: { fontStyle: 'bold' } }]);
-        doc.autoTable({ startY: 32, head: [['DESCRIPCIÓN', 'UND.', 'CANT.', 'P. UNIT', 'TOTAL']], body: body, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: { 1:{halign:'center'}, 2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'right'} } });
+        const total = insumosGlobalList.reduce((a, b) => a + b.precioTotal, 0);
+        body.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: f(total, 'total'), styles: { fontStyle: 'bold' } }]);
+        doc.autoTable({ startY: 32, head: [['DESCRIPCIÓN', 'UND.', 'CANT.', 'P. UNIT', 'TOTAL']], body: body, theme: 'grid', headStyles: headerStyles, styles: tableStyles, columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } } });
     };
     if (type === 'masivo') { addPagePG(); addPageAPUs(); addPageInsumos('materiales'); addPageInsumos('mano_obra'); addPageInsumos('equipos'); doc.save(`PROYECTO_${projectName}_COMPLETO.pdf`); }
     else if (type === 'pg') { addPagePG(); doc.save(`B1_${projectName}.pdf`); }
@@ -2643,95 +2453,105 @@ async function generateExcelReportSICOES(type, projectName) {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "PresuRE App";
     const s = appData.settings;
-    const n = (num, t) => { 
-        let d = 2; 
-        if(t==='qty') d = s.decimals_qty; 
-        if(t==='total') d = s.decimals_total; 
-        if(t==='price') d = s.decimals_price; 
-        if(t==='yield') d = s.decimals_yield; 
-        if(t==='partial') d = s.decimals_partial; 
+    const n = (num, t) => {
+        let d = 2;
+        if (t === 'qty') d = s.decimals_qty;
+        if (t === 'total') d = s.decimals_total;
+        if (t === 'price') d = s.decimals_price;
+        if (t === 'yield') d = s.decimals_yield;
+        if (t === 'partial') d = s.decimals_partial;
         return parseFloat(parseFloat(num).toFixed(d));
     };
     const buildB1 = () => {
         const ws = workbook.addWorksheet("B-1");
-        ws.columns = [ { width: 5 }, { width: 45 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 15 } ];
+        ws.columns = [{ width: 5 }, { width: 45 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 15 }];
         ws.addRow(["FORMULARIO B-1"]).font = { bold: true, size: 14 };
         ws.addRow(["PRESUPUESTO GENERAL DE OBRA"]).font = { bold: true };
         ws.addRow([`PROYECTO: ${projectName}`]);
         ws.addRow([]);
         const header = ws.addRow(["Nº", "DESCRIPCIÓN", "UNIDAD", "CANTIDAD", "P. UNITARIO", "TOTAL"]);
-        header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF274B7D' } };
-        let c=1, gt=0;
+        for(let i = 1; i <= 6; i++) {
+            header.getCell(i).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            header.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+        }
+        let c = 1, gt = 0;
         appData.modules.forEach(mod => {
-            const rMod = ws.addRow([mod.name.toUpperCase()]);
-            rMod.font = { bold: true, italic: true };
-            rMod.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDF2F7' } };
+            const rMod = ws.addRow([mod.name.toUpperCase(), "", "", "", "", ""]);
+            ws.mergeCells(rMod.number, 1, rMod.number, 6); // Opcional: fusiona las celdas para que se vea mejor
+            for(let i = 1; i <= 6; i++) {
+                rMod.getCell(i).font = { bold: true, italic: true };
+                rMod.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+            }
             appData.projectItems.filter(i => i.moduleId === mod.id).forEach(item => {
                 const pu = calculateUnitPrice(item);
                 const puR = roundToConfig(pu, 'total');
                 const qtyR = roundToConfig(item.quantity, 'qty');
                 const tot = puR * qtyR;
                 gt += tot;
-                ws.addRow([c++, item.description, item.unit, n(qtyR,'qty'), n(puR,'total'), n(tot,'total')]);
+                ws.addRow([c++, item.description, item.unit, n(qtyR, 'qty'), n(puR, 'total'), n(tot, 'total')]);
             });
         });
-        const rTot = ws.addRow(["", "TOTAL PRESUPUESTO", "", "", "", n(gt,'total')]);
+        const rTot = ws.addRow(["", "TOTAL PRESUPUESTO", "", "", "", n(gt, 'total')]);
         rTot.font = { bold: true };
-        rTot.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6F6D5' } };
+        rTot.getCell(6).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
     };
     const buildAPU = () => {
         const ws = workbook.addWorksheet("B-2");
-        ws.columns = [{width:40}, {width:10}, {width:12}, {width:12}, {width:15}];
+        ws.columns = [{ width: 40 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 15 }];
         ws.addRow(["FORMULARIO B-2"]).font = { bold: true, size: 14 };
         ws.addRow(["ANÁLISIS DE PRECIOS UNITARIOS"]);
         ws.addRow([`PROYECTO: ${projectName}`]);
         ws.addRow([]);
         let c = 1;
         appData.modules.forEach(mod => {
-            appData.projectItems.filter(i=>i.moduleId===mod.id).forEach(item => {
+            appData.projectItems.filter(i => i.moduleId === mod.id).forEach(item => {
                 const matArr = item.materiales || [];
                 const moArr = item.mano_obra || [];
                 const eqArr = item.equipos || [];
-                const sumMat = matArr.reduce((a,b)=>a+(b.qty*b.price),0);
-                const sumMo = moArr.reduce((a,b)=>a+(b.qty*b.price),0);
-                const valSoc = sumMo * (s.social/100);
-                const valIvaMo = (sumMo + valSoc) * (s.iva_mo/100);
+                const sumMat = matArr.reduce((a, b) => a + (b.qty * b.price), 0);
+                const sumMo = moArr.reduce((a, b) => a + (b.qty * b.price), 0);
+                const valSoc = sumMo * (s.social / 100);
+                const valIvaMo = (sumMo + valSoc) * (s.iva_mo / 100);
                 const totalMo = sumMo + valSoc + valIvaMo;
-                const sumEq = eqArr.reduce((a,b)=>a+(b.qty*b.price),0);
-                const valTools = totalMo * (s.tools/100);
+                const sumEq = eqArr.reduce((a, b) => a + (b.qty * b.price), 0);
+                const valTools = totalMo * (s.tools / 100);
                 const totalEq = sumEq + valTools;
                 const cd = sumMat + totalMo + totalEq;
-                const valGG = cd * (s.gg/100);
-                const valUtil = (cd + valGG) * (s.util/100);
-                const valIT = (cd + valGG + valUtil) * (s.it/100);
+                const valGG = cd * (s.gg / 100);
+                const valUtil = (cd + valGG) * (s.util / 100);
+                const valIT = (cd + valGG + valUtil) * (s.it / 100);
                 let finalP = cd + valGG + valUtil + valIT;
                 finalP = roundToConfig(finalP, 'total');
-                const rHead = ws.addRow(["ÍTEM " + c++, item.description, "UNIDAD: " + item.unit, "CANT: " + n(item.quantity,'qty')]);
-                rHead.font = { bold: true };
-                rHead.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                // Agregamos un texto vacío al final para la columna 5
+                const rHead = ws.addRow(["ÍTEM " + c++, item.description, "UNIDAD: " + item.unit, "CANT: " + n(item.quantity, 'qty'), ""]);
+                for(let i = 1; i <= 5; i++) {
+                    rHead.getCell(i).font = { bold: true };
+                    rHead.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+                }
                 ws.addRow(["DESCRIPCIÓN", "UNIDAD", "RENDIMIENTO", "PRECIO", "PARCIAL"]).font = { italic: true };
                 ws.addRow(["MATERIALES"]).font = { bold: true, underline: true };
-                matArr.forEach(r => ws.addRow(["  "+r.desc, r.unit, n(r.qty,'yield'), n(r.price,'price'), n(r.qty*r.price,'partial')]));
-                ws.addRow(["SUBTOTAL MATERIALES", "", "", "", n(sumMat,'partial')]).font = { bold: true };
+                matArr.forEach(r => ws.addRow(["  " + r.desc, r.unit, n(r.qty, 'yield'), n(r.price, 'price'), n(r.qty * r.price, 'partial')]));
+                ws.addRow(["SUBTOTAL MATERIALES", "", "", "", n(sumMat, 'partial')]).font = { bold: true };
                 ws.addRow(["MANO DE OBRA"]).font = { bold: true, underline: true };
-                moArr.forEach(r => ws.addRow(["  "+r.desc, r.unit, n(r.qty,'yield'), n(r.price,'price'), n(r.qty*r.price,'partial')]));
-                ws.addRow(["SUBTOTAL MANO DE OBRA", "", "", "", n(sumMo,'partial')]);
-                ws.addRow([`CARGAS SOCIALES (${s.social}%)`, "", "", "", n(valSoc,'partial')]).font = { color: { argb: 'FF718096' } };
-                ws.addRow([`IVA MO (${s.iva_mo}%)`, "", "", "", n(valIvaMo,'partial')]).font = { color: { argb: 'FF718096' } };
-                ws.addRow(["TOTAL MANO DE OBRA", "", "", "", n(totalMo,'partial')]).font = { bold: true };
+                moArr.forEach(r => ws.addRow(["  " + r.desc, r.unit, n(r.qty, 'yield'), n(r.price, 'price'), n(r.qty * r.price, 'partial')]));
+                ws.addRow(["SUBTOTAL MANO DE OBRA", "", "", "", n(sumMo, 'partial')]);
+                ws.addRow([`CARGAS SOCIALES (${s.social}%)`, "", "", "", n(valSoc, 'partial')]).font = { color: { argb: 'FF718096' } };
+                ws.addRow([`IVA MO (${s.iva_mo}%)`, "", "", "", n(valIvaMo, 'partial')]).font = { color: { argb: 'FF718096' } };
+                ws.addRow(["TOTAL MANO DE OBRA", "", "", "", n(totalMo, 'partial')]).font = { bold: true };
                 ws.addRow(["EQUIPO Y MAQUINARIA"]).font = { bold: true, underline: true };
-                eqArr.forEach(r => ws.addRow(["  "+r.desc, r.unit, n(r.qty,'yield'), n(r.price,'price'), n(r.qty*r.price,'partial')]));
-                ws.addRow(["SUBTOTAL EQUIPO", "", "", "", n(sumEq,'partial')]);
-                ws.addRow([`HERRAMIENTAS MENORES (${s.tools}% de MO)`, "", "", "", n(valTools,'partial')]).font = { color: { argb: 'FF718096' } };
-                ws.addRow(["TOTAL EQUIPO", "", "", "", n(totalEq,'partial')]).font = { bold: true };
-                ws.addRow(["COSTO DIRECTO", "", "", "", n(cd,'total')]);
-                ws.addRow([`GASTOS GENERALES (${s.gg}%)`, "", "", "", n(valGG,'total')]);
-                ws.addRow([`UTILIDAD (${s.util}%)`, "", "", "", n(valUtil,'total')]);
-                ws.addRow([`IMPUESTO IT (${s.it}%)`, "", "", "", n(valIT,'total')]);
-                const rFin = ws.addRow(["TOTAL PRECIO UNITARIO", "", "", "", n(finalP,'total')]);
-                rFin.font = { bold: true, size: 11 };
-                rFin.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF0F0' } };
+                eqArr.forEach(r => ws.addRow(["  " + r.desc, r.unit, n(r.qty, 'yield'), n(r.price, 'price'), n(r.qty * r.price, 'partial')]));
+                ws.addRow(["SUBTOTAL EQUIPO", "", "", "", n(sumEq, 'partial')]);
+                ws.addRow([`HERRAMIENTAS MENORES (${s.tools}% de MO)`, "", "", "", n(valTools, 'partial')]).font = { color: { argb: 'FF718096' } };
+                ws.addRow(["TOTAL EQUIPO", "", "", "", n(totalEq, 'partial')]).font = { bold: true };
+                ws.addRow(["COSTO DIRECTO", "", "", "", n(cd, 'total')]);
+                ws.addRow([`GASTOS GENERALES (${s.gg}%)`, "", "", "", n(valGG, 'total')]);
+                ws.addRow([`UTILIDAD (${s.util}%)`, "", "", "", n(valUtil, 'total')]);
+                ws.addRow([`IMPUESTO IT (${s.it}%)`, "", "", "", n(valIT, 'total')]);
+                const rFin = ws.addRow(["TOTAL PRECIO UNITARIO", "", "", "", n(finalP, 'total')]);
+                for(let i = 1; i <= 5; i++) {
+                    rFin.getCell(i).font = { bold: true, size: 11 };
+                    rFin.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+                }
                 ws.addRow([]);
             });
         });
@@ -2739,18 +2559,20 @@ async function generateExcelReportSICOES(type, projectName) {
     const buildInsumos = (cat, sheetName) => {
         collectInsumosFromProjectGlobal(cat);
         const ws = workbook.addWorksheet(sheetName);
-        ws.columns = [{width:40}, {width:10}, {width:15}, {width:15}, {width:15}];
+        ws.columns = [{ width: 40 }, { width: 10 }, { width: 15 }, { width: 15 }, { width: 15 }];
         ws.addRow([`LISTADO DE ${cat.toUpperCase()}`]).font = { bold: true, size: 14 };
         ws.addRow([`PROYECTO: ${projectName}`]);
         ws.addRow([]);
         const head = ws.addRow(["DESCRIPCIÓN", "UNIDAD", "CANT. TOTAL", "PRECIO UNIT.", "TOTAL"]);
-        head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        head.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D3748' } };
+        for(let i = 1; i <= 5; i++) {
+            head.getCell(i).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            head.getCell(i).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+        }
         let t = 0;
-        insumosGlobalList.forEach(i => { t+=i.precioTotal; ws.addRow([i.desc, i.unit, n(i.cantidadTotal,'qty'), n(i.precioUnitario,'price'), n(i.precioTotal,'total')]); });
-        const rTot = ws.addRow(["COSTO TOTAL", "", "", "", n(t,'total')]);
+        insumosGlobalList.forEach(i => { t += i.precioTotal; ws.addRow([i.desc, i.unit, n(i.cantidadTotal, 'qty'), n(i.precioUnitario, 'price'), n(i.precioTotal, 'total')]); });
+        const rTot = ws.addRow(["COSTO TOTAL", "", "", "", n(t, 'total')]);
         rTot.font = { bold: true };
-        rTot.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBEE3F8' } };
+        rTot.getCell(5).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBAE6FD' } };
     };
     if (type === 'masivo') { buildB1(); buildAPU(); buildInsumos('materiales', "Materiales"); buildInsumos('mano_obra', "Mano de Obra"); buildInsumos('equipos', "Equipos"); const buffer = await workbook.xlsx.writeBuffer(); saveExcelBuffer(buffer, `PROYECTO_${projectName}_COMPLETO.xlsx`); }
     else if (type === 'pg') { buildB1(); const buffer = await workbook.xlsx.writeBuffer(); saveExcelBuffer(buffer, "B1.xlsx"); }
@@ -2761,7 +2583,7 @@ async function generateExcelReportSICOES(type, projectName) {
 let insumosGlobalList = [];
 function collectInsumosFromProjectGlobal(type) {
     insumosGlobalList = [];
-    const resourceKey = type; 
+    const resourceKey = type;
     const insumosMap = new Map();
     appData.projectItems.forEach(item => {
         if (item[resourceKey]) {
@@ -2786,8 +2608,8 @@ function collectInsumosFromProjectGlobal(type) {
 
 function initSortableB1() {
     const el = document.getElementById('b1-body');
-    if(!el) return;
-    if(el._sortable) el._sortable.destroy();
+    if (!el) return;
+    if (el._sortable) el._sortable.destroy();
     el._sortable = Sortable.create(el, {
         animation: 150, handle: 'tr', filter: 'input, textarea, button, select, i', preventOnFilter: false,
         ghostClass: 'sortable-ghost', delay: 200, delayOnTouchOnly: true,
@@ -2803,7 +2625,7 @@ function initSortableB1() {
             activeModuleItems.sort((a, b) => {
                 const idxA = newOrderMap.has(a.id) ? newOrderMap.get(a.id) : -1;
                 const idxB = newOrderMap.has(b.id) ? newOrderMap.get(b.id) : -1;
-                if (idxA === -1) return 1; 
+                if (idxA === -1) return 1;
                 if (idxB === -1) return -1;
                 return idxA - idxB;
             });
@@ -2821,15 +2643,15 @@ function initSortableEditor(type) {
     const config = { 'materiales': { id: 'table-mat', prop: 'materiales' }, 'mano_obra': { id: 'table-mo', prop: 'mano_obra' }, 'equipos': { id: 'table-eq', prop: 'equipos' } };
     const conf = config[type];
     const table = document.getElementById(conf.id);
-    if(!table) return;
+    if (!table) return;
     const el = table.querySelector('tbody');
-    if(el._sortable) el._sortable.destroy();
+    if (el._sortable) el._sortable.destroy();
     el._sortable = Sortable.create(el, {
         animation: 150, filter: 'input, textarea, button, select', preventOnFilter: false,
         ghostClass: 'sortable-ghost', delay: 200, delayOnTouchOnly: true,
         onEnd: function (evt) {
             let item = (editorContext === 'project') ? appData.projectItems.find(i => i.id === currentEditId) : appData.itemBank.find(i => i.id === currentEditId);
-            if(!item) return;
+            if (!item) return;
             const movedRes = item[conf.prop].splice(evt.oldIndex, 1)[0];
             item[conf.prop].splice(evt.newIndex, 0, movedRes);
             saveData();
@@ -2852,7 +2674,7 @@ function initiateUnification() {
     selected.forEach((item, index) => {
         let apuListHTML = '';
         if (item.occurrences && item.occurrences.length > 0) {
-            apuListHTML = item.occurrences.map(occ => `<li><i class="fas fa-caret-right" style="color:var(--accent)"></i> ${occ.itemDesc} <span style="color:#718096">(${fmt(occ.rendimiento, 'yield')})</span></li>`).join('');
+            apuListHTML = item.occurrences.map(occ => `<li><i class="fas fa-caret-right" style="color:var(--accent)"></i> ${occ.itemDesc} <span style="color:var(--text-muted)">(${fmt(occ.rendimiento, 'yield')})</span></li>`).join('');
         } else apuListHTML = '<li>No se encontraron usos registrados.</li>';
         const div = document.createElement('div');
         div.style.marginBottom = "10px";
@@ -2878,7 +2700,7 @@ function initiateUnification() {
 }
 
 function toggleUnifyDetails(elementId, event) {
-    if(event) event.stopPropagation();
+    if (event) event.stopPropagation();
     const list = document.getElementById(elementId);
     if (list.style.display === 'block') list.style.display = 'none';
     else {
@@ -2925,18 +2747,18 @@ function executeUnification(masterIndex) {
 // --- ATAJOS DE TECLADO ---
 
 function setupEditModeShortcuts() {
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (!document.getElementById('panel-editor').classList.contains('active')) return;
         if (e.ctrlKey) {
-            switch(e.key) {
+            switch (e.key) {
                 case 'ArrowLeft': e.preventDefault(); navigateEditor(-1); break;
                 case 'ArrowRight': e.preventDefault(); navigateEditor(1); break;
                 case 's': e.preventDefault(); closeEditor(); break;
                 case 'Escape': e.preventDefault(); discardEditor(); break;
             }
         }
-        if(!currentEditField) return;
-        switch(e.key) {
+        if (!currentEditField) return;
+        switch (e.key) {
             case 'Enter': e.preventDefault(); saveCurrentField(); moveToNextField(); break;
             case 'Escape': e.preventDefault(); cancelEdit(); break;
             case 'Tab': e.preventDefault(); moveToNextField(); break;
@@ -2944,7 +2766,7 @@ function setupEditModeShortcuts() {
             case 'ArrowDown': e.preventDefault(); navigateRows(1); break;
         }
     });
-    document.addEventListener('focusin', function(e) {
+    document.addEventListener('focusin', function (e) {
         if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
             const field = e.target;
             const row = field.closest('tr');
@@ -2960,10 +2782,35 @@ function setupEditModeShortcuts() {
             }
         }
     });
-    document.addEventListener('focusout', function(e) {
+    document.addEventListener('focusout', function (e) {
         currentEditField = null;
         currentEditRow = null;
         currentEditType = null;
+    });
+}
+
+function setupGlobalShortcuts() {
+    document.addEventListener('keydown', function (e) {
+        // Ignoramos si el usuario está escribiendo en un input o textarea
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+        // Atajos SOLO con la tecla Alt (Alt + 1, 2, 3, 4)
+        // Nos aseguramos de que Ctrl y Shift NO estén presionadas
+        if (e.altKey && !e.ctrlKey && !e.shiftKey) {
+            let tabToSwitch = null;
+
+            switch (e.key) {
+                case '1': tabToSwitch = 'b1'; break;     // Presupuesto
+                case '2': tabToSwitch = 'items'; break;  // Ítems
+                case '3': tabToSwitch = 'db'; break;     // Base de Datos
+                case '4': tabToSwitch = 'calc'; break;   // Calculadora
+            }
+
+            if (tabToSwitch) {
+                e.preventDefault(); // Evitamos acciones secundarias del navegador
+                switchTab(tabToSwitch);
+            }
+        }
     });
 }
 
@@ -3083,8 +2930,7 @@ function updateThemeIcon(isDark) {
     }
 }
 
-// --- PWA INSTALL (v2.0) ---
-
+// --- PWA INSTALL ---
 function checkPwaInstall() {
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
@@ -3123,27 +2969,32 @@ function showIosInstallToast() {
 
 // --- INICIALIZACIÓN ---
 
-window.onload = function() {
-    loadFromStorage();
+window.onload = async function () {
+    await loadFromStorage();
+
     initializeDefaultSettings();
-    renderB1(); 
-    renderBankList(); 
-    renderDBTables(); 
+    renderB1();
+    renderBankList();
+    renderDBTables();
     loadSettingsToUI();
     setupEditModeShortcuts();
+    setupGlobalShortcuts();
     updatePrecisionIndicator();
     loadTheme();
     checkPwaInstall();
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
-
-    // --- Lógica del Header Scroll & Nav Sticky ---
+    // --- NUEVO: Restaurar pestaña activa tras recargar ---
+    const savedTab = localStorage.getItem('presure_active_tab');
+    if (savedTab) {
+        switchTab(savedTab);
+    }
     // --- Lógica Avanzada Header Scroll & Nav Sticky (Definitiva) ---
     let lastScrollTop = 0;
     const headerElement = document.querySelector('.app-header');
-    const navElement = document.querySelector('.app-nav'); 
-    
+    const navElement = document.querySelector('.app-nav');
+
     // Umbral para evitar rebotes (hysteresis)
-    const scrollThreshold = 5; 
+    const scrollThreshold = 5;
 
     function handleScroll() {
         // 1. Si es móvil (< 769px), NO HACEMOS NADA. 
@@ -3151,11 +3002,11 @@ window.onload = function() {
         if (window.innerWidth < 769) return;
 
         const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-        
+
         // Protección contra rebote en iOS (scroll negativo)
         if (currentScroll <= 0) {
             headerElement.classList.remove('header-hidden');
-            if(navElement) navElement.classList.remove('sticky-mode');
+            if (navElement) navElement.classList.remove('sticky-mode');
             lastScrollTop = 0;
             return;
         }
@@ -3164,7 +3015,7 @@ window.onload = function() {
         // 60px es aprox la altura del header
         if (currentScroll < 60) {
             headerElement.classList.remove('header-hidden');
-            if(navElement) navElement.classList.remove('sticky-mode');
+            if (navElement) navElement.classList.remove('sticky-mode');
             lastScrollTop = currentScroll;
             return;
         }
@@ -3176,13 +3027,13 @@ window.onload = function() {
                 // 1. Ocultar Header
                 headerElement.classList.add('header-hidden');
                 // 2. Subir Nav (activar clase sticky-mode que pone top: 15px)
-                if(navElement) navElement.classList.add('sticky-mode');
+                if (navElement) navElement.classList.add('sticky-mode');
             } else {
                 // SCROLL HACIA ARRIBA ->
                 // 1. Mostrar Header
                 headerElement.classList.remove('header-hidden');
                 // 2. Bajar Nav (quitar clase sticky-mode para volver a top: 75px)
-                if(navElement) navElement.classList.remove('sticky-mode');
+                if (navElement) navElement.classList.remove('sticky-mode');
             }
             lastScrollTop = currentScroll;
         }
@@ -3191,13 +3042,21 @@ window.onload = function() {
     // Usar 'passive: true' mejora el rendimiento del scroll
     window.addEventListener('scroll', handleScroll, { passive: true });
 
-    // Limpieza de seguridad al redimensionar la ventana
-    // Esto arregla bugs si pasas de PC a modo Tablet/Móvil con la ventana
-    window.addEventListener('resize', function() {
-        if (window.innerWidth < 769) {
-            // Si pasamos a móvil, limpiamos clases de escritorio para evitar conflictos
-            if(headerElement) headerElement.classList.remove('header-hidden');
-            if(navElement) navElement.classList.remove('sticky-mode');
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+    }
+
+    // Escuchar cambios de tema del sistema operativo en tiempo real
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        // Solo cambiamos si el usuario no ha fijado un tema manualmente en localStorage
+        if (!localStorage.getItem('theme')) {
+            if (e.matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                updateThemeIcon(true);
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                updateThemeIcon(false);
+            }
         }
     });
 
@@ -3207,85 +3066,3 @@ function initializeDefaultSettings() {
     if (!appData.settings.numberFormat) appData.settings.numberFormat = detectUserLocale();
     saveData();
 }
-
-// Hacer funciones globales
-window.switchTab = switchTab;
-window.changePage = changePage;
-window.createEmptyItemB1 = createEmptyItemB1;
-window.duplicateProjectItem = duplicateProjectItem;
-window.deleteProjectItem = deleteProjectItem;
-window.saveProjectItemToBank = saveProjectItemToBank;
-window.editItem = editItem;
-window.openItemBankModalForSelect = openItemBankModalForSelect;
-window.addSingleItemToProject = addSingleItemToProject;
-window.openResourceModal = openResourceModal;
-window.quickCreateResource = quickCreateResource;
-window.closeResourceModal = closeResourceModal;
-window.filterModalList = filterModalList;
-window.resolveConflict = resolveConflict;
-window.closeConfigModal = closeConfigModal;
-window.openConfigModal = openConfigModal;
-window.saveSettings = saveSettings;
-window.exportB1ToExcel = exportB1ToExcel;
-window.openSaveOptionsModal = openSaveOptionsModal;
-window.exportProjectJSON = exportProjectJSON;
-window.exportBudgetOnlyJSON = exportBudgetOnlyJSON;
-window.loadProjectJSON = loadProjectJSON;
-window.openDeleteModal = openDeleteModal;
-window.closeDeleteModal = closeDeleteModal;
-window.clearBudgetOnly = clearBudgetOnly;
-window.confirmFullReset = confirmFullReset;
-window.exportBankJSON = exportBankJSON;
-window.importBankJSON = importBankJSON;
-window.openReportModal = openReportModal;
-window.closeReportModal = closeReportModal;
-window.setReportFormat = setReportFormat;
-window.generateSelectedReport = generateSelectedReport;
-window.addDbRow = addDbRow;
-window.toggleDbSort = toggleDbSort;
-window.handleDescEnter = handleDescEnter;
-window.updateDbItem = updateDbItem;
-window.deleteDbItem = deleteDbItem;
-window.importDBFromExcel = importDBFromExcel;
-window.cleanAndMergeDuplicates = cleanAndMergeDuplicates;
-window.syncDbToBank = syncDbToBank;
-window.openInsumosModal = openInsumosModal;
-window.closeInsumosModal = closeInsumosModal;
-window.toggleInsumoSelection = toggleInsumoSelection;
-window.toggleSelectAllInsumos = toggleSelectAllInsumos;
-window.updatePrecioInsumo = updatePrecioInsumo;
-window.aplicarPreciosEditados = aplicarPreciosEditados;
-window.exportInsumosToExcel = exportInsumosToExcel;
-window.initiateUnification = initiateUnification;
-window.toggleUnifyDetails = toggleUnifyDetails;
-window.closeUnifyModal = closeUnifyModal;
-window.executeUnification = executeUnification;
-window.updateProjectItem = updateProjectItem;
-window.handleMathInput = handleMathInput;
-window.autoformatInput = autoformatInput;
-window.updateRes = updateRes;
-window.removeRes = removeRes;
-window.navigateEditor = navigateEditor;
-window.discardEditor = discardEditor;
-window.closeEditor = closeEditor;
-window.searchCalcItem = searchCalcItem;
-window.recalcCalcTable = recalcCalcTable;
-window.updateCalcValue = updateCalcValue;
-window.printCalcReport = printCalcReport;
-window.solveMathExpression = solveMathExpression;
-window.parseNumber = parseNumber;
-window.fmt = fmt;
-window.addModule = addModule;
-window.renameCurrentModule = renameCurrentModule;
-window.cloneCurrentModule = cloneCurrentModule;
-window.deleteCurrentModule = deleteCurrentModule;
-window.filterBankModal = filterBankModal;
-window.toggleBankSelection = toggleBankSelection;
-window.toggleSelectAllBank = toggleSelectAllBank;
-window.addSelectedBankItems = addSelectedBankItems;
-window.closeBankModal = closeBankModal;
-window.importBudgetFromExcel = importBudgetFromExcel;
-window.importComplexAPUReport = importComplexAPUReport;
-window.calculateUnitPrice = calculateUnitPrice;
-window.renderAPUTables = renderAPUTables;
-window.updateEditorMeta = updateEditorMeta;
