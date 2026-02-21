@@ -226,7 +226,7 @@ body {
 
 /* --- Botones (combinados) --- */
 .btn {
-    padding: 5px 10px;
+    padding: 4px 12px; /* Padding mínimo horizontal y vertical */
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -237,18 +237,22 @@ body {
     gap: 6px;
     color: white;
     font-weight: 600;
-    min-height: 38px;
+    min-height: 32px; /* Altura estandarizada reducida */
     margin-bottom: 0;
-    white-space: nowrap;
+    white-space: nowrap; /* Mantiene el ancho adaptable al contenido */
     transition: all 0.2s ease;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    border: 1px solid rgba(255,255,255,0.1); /* Borde sutil */
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
 .btn:hover { transform: translateY(-1px); box-shadow: 0 3px 6px rgba(0,0,0,0.15); }
 .btn:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
 
-.btn-sm { padding: 5px 10px; font-size: 0.75rem; min-height: 30px; }
+.btn-sm { 
+    padding: 3px 8px; /* Padding mínimo para botones pequeños */
+    font-size: 0.75rem; 
+    min-height: 28px; /* Altura estandarizada reducida */
+}
 
 /* Tipos de Botones */
 .btn-primary { 
@@ -276,6 +280,8 @@ body {
     color: rgba(255, 255, 255, 0.9) !important;
     font-weight: 500;
     transition: all 0.2s ease;
+    min-height: 38px;
+    padding: 5px 10px;
 }
 
 /* 2. Estado Hover: Reacción suave al pasar el mouse */
@@ -394,7 +400,7 @@ table {
 
 th, td {
     border: 1px solid #e2e8f0;
-    padding: 8px 6px;
+    padding: 4px 4px;
     text-align: left;
     vertical-align: middle;
 }
@@ -438,13 +444,20 @@ input[type="number"], input[type="text"], select, textarea {
     color: var(--text-primary);
 }
 
+.table-container input[type="number"], 
+.table-container input[type="text"], 
+.table-container select {
+    padding: 2px 4px; 
+    height: 26px; /* Altura fija mínima */
+}
+
 textarea.table-input, textarea.db-desc-input {
     resize: vertical;
-    min-height: 34px;
-    height: 34px;
+    min-height: 28px; 
+    height: 28px;
     overflow: hidden;
-    line-height: 1.3;
-    padding: 6px 8px;
+    line-height: 1.2;
+    padding: 4px 6px; 
 }
 
 textarea.table-input:focus, textarea.db-desc-input:focus {
@@ -781,7 +794,7 @@ input[readonly] {
 /* --- PWA Toast --- */
 #pwa-toast {
     position: fixed;
-    bottom: 20px;
+    bottom: 75px; 
     left: 50%;
     transform: translateX(-50%);
     background: var(--bg-card);
@@ -792,7 +805,7 @@ input[readonly] {
     display: none;
     width: 90%;
     max-width: 400px;
-    z-index: 1000;
+    z-index: 2500; 
     border: 1px solid var(--border-color);
 }
 
@@ -859,13 +872,13 @@ footer {
 }
 
 @media (max-width: 767px) {
-    .btn { padding: 7px 12px; min-height: 36px; }
-    .btn-sm { padding: 4px 8px; }
+    .btn { padding: 6px 12px; min-height: 34px; }
+    .btn-sm { padding: 4px 8px; min-height: 30px; }
     .panel { padding: 12px; }
-    th, td { padding: 6px 4px; }
+    th, td { padding: 2px 3px; }
     .group-header { padding: 10px 12px; }
-    #panel-editor table th, #panel-editor table td { font-size: 12px; padding: 6px 4px; }
-    #panel-db .db-table th, #panel-db .db-table td { padding: 5px 3px; font-size: 11px; }
+    #panel-editor table th, #panel-editor table td { font-size: 12px; padding: 2px 3px; }
+    #panel-db .db-table th, #panel-db .db-table td { padding: 2px 2px; font-size: 11px; }
 }
 
 /* --- Sortable --- */
