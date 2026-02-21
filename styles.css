@@ -1486,3 +1486,62 @@ body { padding-bottom: 60px; }
     from { opacity: 0.5; }
     to { opacity: 1; }
 }
+
+/* --- Columnas Colapsables (Clic en Encabezado) --- */
+.toggleable-col {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.toggleable-col:hover {
+    background-color: #2c5282; /* Feedback visual al pasar el ratón */
+}
+
+th.col-collapsed {
+    width: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    padding: 5px !important;
+    color: transparent !important; /* Oculta el texto original */
+    position: relative;
+    background-color: #4a5568 !important; /* Fondo distintivo */
+}
+
+[data-theme="dark"] th.col-collapsed {
+    background-color: #1a202c !important;
+}
+
+/* Ícono de "+" centrado cuando está colapsado */
+th.col-collapsed::after {
+    content: '\f067'; /* Código FontAwesome para fa-plus */
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: white;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+}
+
+/* Encoge la celda de datos a la misma medida que el encabezado */
+td.col-collapsed {
+    width: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    padding: 0 !important;
+    color: transparent !important; /* Oculta el texto suelto */
+    font-size: 0 !important;
+    overflow: hidden !important;
+    background-color: var(--bg-body); /* Fondo sutil para marcar la columna cerrada */
+}
+
+/* Ajuste de fondo para modo oscuro en la columna cerrada */
+[data-theme="dark"] td.col-collapsed {
+    background-color: var(--bg-card-alt);
+}
+
+/* Oculta cualquier input, botón o div dentro de la celda colapsada */
+td.col-collapsed * {
+    display: none !important;
+}

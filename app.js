@@ -315,7 +315,7 @@ async function loadFromStorage() {
                 }
             });
             if (!appData.settings) appData.settings = {};
-            const defaults = { social: 55, iva_mo: 14.94, tools: 5, gg: 10, util: 10, it: 3.09, decimals_yield: 5, decimals_price: 3, decimals_total: 2, numberFormat: 'intl' };
+            const defaults = { social: 55, iva_mo: 14.94, tools: 5, gg: 10, util: 10, it: 3.09, decimals_yield: 5, decimals_price: 3, decimals_total: 2, numberFormat: 'intl', hiddenColumnsB1: [] };
             appData.settings = { ...defaults, ...appData.settings };
         } else {
             // Valores por defecto si la base de datos está vacía
@@ -546,6 +546,7 @@ function renderB1() {
     tbody.appendChild(fragment);
     updatePaginationInfo('b1', totalItems);
     recalculateTotalsDisplay();
+    applyColumnVisibility();
     initSortableB1();
 }
 
@@ -654,6 +655,56 @@ function getNextBankCode() {
         if (!isNaN(num) && num > max) max = num;
     });
     return max + 1;
+}
+
+function toggleB1Column(colIndex) {
+    if (!appData.settings.hiddenColumnsB1) appData.settings.hiddenColumnsB1 = [];
+    
+    const idx = appData.settings.hiddenColumnsB1.indexOf(colIndex);
+    if (idx > -1) {
+        // Si ya está colapsada, la removemos del array (la expandimos)
+        appData.settings.hiddenColumnsB1.splice(idx, 1);
+    } else {
+        // Si está expandida, la agregamos al array (la colapsamos)
+        appData.settings.hiddenColumnsB1.push(colIndex);
+    }
+    
+    saveData();
+    applyColumnVisibility();
+}
+
+function applyColumnVisibility() {
+    const table = document.getElementById('table-b1');
+    if (!table) return;
+    
+    const hiddenCols = appData.settings.hiddenColumnsB1 || [];
+
+    // 1. Aplicar a los encabezados (<th>)
+    const headers = table.querySelectorAll('thead tr th');
+    headers.forEach((th, index) => {
+        if (hiddenCols.includes(index)) {
+            th.classList.add('col-collapsed');
+            th.title = "Clic para expandir";
+        } else {
+            th.classList.remove('col-collapsed');
+            if (th.classList.contains('toggleable-col')) {
+                th.title = "Clic para ocultar";
+            }
+        }
+    });
+
+    // 2. Aplicar a las celdas de datos (<td>)
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const cells = row.children;
+        for (let i = 0; i < cells.length; i++) {
+            if (hiddenCols.includes(i)) {
+                cells[i].classList.add('col-collapsed');
+            } else {
+                cells[i].classList.remove('col-collapsed');
+            }
+        }
+    });
 }
 
 // --- BANCO DE ÍTEMS ---
