@@ -48,7 +48,7 @@
                 <button id="theme-toggle" class="btn"><i class="fas fa-moon"></i></button> <!-- Modo oscuro y claro -->
         
                 <button id="install-btn" class="install-btn hidden"><i class="fas fa-download"></i> Instalar</button>
-                <input type="file" id="fileProject" accept=".json,application/json,text/json,text/plain" style="display:none" onchange="loadProjectJSON(this)">
+                <input type="file" id="fileProject" accept=".sure,.json,application/json,text/json,text/plain" style="display:none" onchange="loadProjectJSON(this)">
             </div>
         </div>
     </header>
@@ -115,18 +115,18 @@
             </div>
             
             <div class="table-container" style="margin-bottom: 0; border-bottom: none; border-radius: 6px 6px 0 0;">
-                <table id="table-b1" style="min-width: 950px;">
+                <table id="table-b1">
                     <thead>
                         <tr>
-                            <th style="width:40px">Edit</th>
-                            <th style="width:35px">Nº</th>
-                            <th style="width:70px" class="toggleable-col" onclick="toggleB1Column(2)">Código</th>
-                            <th class="toggleable-col" onclick="toggleB1Column(3)">Descripción del Ítem</th>
-                            <th style="width:55px" class="toggleable-col" onclick="toggleB1Column(4)">Und.</th>
-                            <th style="width:80px" class="toggleable-col" onclick="toggleB1Column(5)">Cant.</th>
-                            <th style="width:80px" class="toggleable-col" onclick="toggleB1Column(6)">P.Unit</th>
-                            <th style="width:80px" class="toggleable-col" onclick="toggleB1Column(7)">Total</th>
-                            <th style="width:120px">Acciones</th>
+                            <th style="width:40px; min-width:40px;">Edit</th>
+                            <th style="width:35px; min-width:35px;">Nº</th>
+                            <th style="width:70px; min-width:70px;" class="toggleable-col" onclick="toggleB1Column(2)">Código</th>
+                            <th style="min-width:250px;" class="toggleable-col" onclick="toggleB1Column(3)">Descripción del Ítem</th>
+                            <th style="width:55px; min-width:55px;" class="toggleable-col" onclick="toggleB1Column(4)">Und.</th>
+                            <th style="width:80px; min-width:80px;" class="toggleable-col" onclick="toggleB1Column(5)">Cant.</th>
+                            <th style="width:80px; min-width:80px;" class="toggleable-col" onclick="toggleB1Column(6)">P.Unit</th>
+                            <th style="width:80px; min-width:80px;" class="toggleable-col" onclick="toggleB1Column(7)">Total</th>
+                            <th style="width:120px; min-width:120px;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="b1-body"></tbody>
@@ -185,7 +185,7 @@
                         <button class="btn btn-warning" onclick="document.getElementById('fileBank').click()">
                             <i class="fas fa-download"></i> Importar
                         </button>
-                        <input type="file" id="fileBank" accept=".json,application/json" style="display:none" onchange="importBankJSON(this)">
+                        <input type="file" id="fileBank" accept=".sure,.json,application/json" style="display:none" onchange="importBankJSON(this)">
                     </div>
                     
                     <div style="position:relative; flex-grow:1; max-width:350px;">
@@ -209,7 +209,7 @@
             </div>
             
             <div class="table-container">
-                <table id="table-bank" style="min-width: 650px;">
+                <table id="table-bank" style="min-width: 600px;">
                     <thead>
                         <tr>
                             <th style="width:35px" title="Agregar al presupuesto">aPresu</th>
@@ -217,7 +217,7 @@
                             <th>Descripción</th>
                             <th style="width:35px">Und.</th>
                             <th style="width:80px">Precio Ref.</th>
-                            <th style="width:85px">Acciones</th>
+                            <th style="width:80px">Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="bank-body"></tbody>

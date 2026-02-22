@@ -2070,7 +2070,7 @@ function exportProjectJSON() {
     const s = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
     const dl = document.createElement('a'); dl.href = s;
     const ahora = new Date(); const dia = String(ahora.getDate()).padStart(2, '0'); const mes = String(ahora.getMonth() + 1).padStart(2, '0'); const año = ahora.getFullYear();
-    dl.download = `Proy_Save_${dia}${mes}${año}.json`;
+    dl.download = `Proy_Save_${dia}${mes}${año}.sure`;
     dl.click();
     showToast('Proyecto guardado');
 }
@@ -2084,7 +2084,7 @@ function exportBudgetOnlyJSON() {
     const s = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(budgetData));
     const dl = document.createElement('a'); dl.href = s;
     const ahora = new Date(); const dia = String(ahora.getDate()).padStart(2, '0'); const mes = String(ahora.getMonth() + 1).padStart(2, '0'); const año = ahora.getFullYear();
-    dl.download = `PG_${dia}${mes}${año}.json`;
+    dl.download = `PG_${dia}${mes}${año}.sure`;
     dl.click();
     showToast('Presupuesto exportado (sin BD)');
 }
@@ -2093,9 +2093,9 @@ function loadProjectJSON(input) {
     const file = input.files[0];
     if (!file) return;
     const fileName = file.name.toLowerCase();
-    const isValidExtension = fileName.endsWith('.json');
+    const isValidExtension = fileName.endsWith('.sure') || fileName.endsWith('.json');
     const isValidMimeType = file.type === 'application/json' || file.type === 'text/json' || file.type === 'text/plain' || file.type === '';
-    if (!isValidExtension && !isValidMimeType) { showToast('Por favor, seleccione un archivo JSON válido.'); input.value = ''; return; }
+    if (!isValidExtension && !isValidMimeType) { showToast('Por favor, seleccione un archivo .sure o .json válido.'); input.value = ''; return; }
     const reader = new FileReader();
     reader.onload = function (e) {
         try {
@@ -2119,7 +2119,7 @@ function exportBankJSON() {
     const s = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData.itemBank));
     const dl = document.createElement('a'); dl.href = s;
     const ahora = new Date(); const dia = String(ahora.getDate()).padStart(2, '0'); const mes = String(ahora.getMonth() + 1).padStart(2, '0'); const año = ahora.getFullYear();
-    dl.download = `BD_${dia}${mes}${año}.json`;
+    dl.download = `BD_${dia}${mes}${año}.sure`;
     dl.click();
     showToast('Banco exportado');
 }
@@ -3110,6 +3110,40 @@ window.onload = async function () {
             }
         }
     });
+
+    // --- LÓGICA DE APERTURA DESDE EL SISTEMA OPERATIVO (File Handling API) ---
+    if ('launchQueue' in window) {
+        window.launchQueue.setConsumer(async (launchParams) => {
+            if (!launchParams.files || launchParams.files.length === 0) return;
+            
+            // Tomamos el primer archivo que el usuario haya intentado abrir
+            const fileHandle = launchParams.files[0];
+            const file = await fileHandle.getFile();
+            
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    appData = { ...appData, ...loadedData };
+                    if (!appData.activeModuleId && appData.modules.length > 0) appData.activeModuleId = appData.modules[0].id;
+                    if (!appData.database) appData.database = { materiales: [], mano_obra: [], equipos: [] };
+                    
+                    saveData();
+                    renderB1(); 
+                    renderBankList(); 
+                    renderDBTables(); 
+                    loadSettingsToUI();
+                    switchTab('b1');
+                    
+                    showToast("Proyecto cargado automáticamente");
+                } catch (err) {
+                    console.error(err); 
+                    showToast("Error al leer el archivo. Verifique que sea válido.");
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
 
 };
 

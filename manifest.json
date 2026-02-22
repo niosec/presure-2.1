@@ -38,5 +38,14 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "file_handlers": [
+    {
+      "action": "./index.html",
+      "accept": {
+        "application/json": [".sure", ".json"],
+        "text/plain": [".sure"]
+      }
+    }
   ]
 }
